@@ -1,0 +1,226 @@
+:root {
+  --paper: #EBE5D6;
+  --paper-card: #FBF8F1;
+  --ink: #23282E;
+  --ink-soft: #5B6169;
+  --rule: #D8D0BC;
+  --accent: #3A5A78;
+  --accent-soft: #C7D4DD;
+  --flag: #B0483C;
+  --display: "Fraunces", serif;
+  --body: "Inter", sans-serif;
+  --mono: "IBM Plex Mono", monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--body);
+  min-height: 100vh;
+  background-image:
+    linear-gradient(var(--rule) 1px, transparent 1px);
+  background-size: 100% 42px;
+  background-attachment: local;
+}
+
+.app {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 32px 24px 120px;
+}
+
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 32px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid var(--ink);
+}
+
+.wordmark {
+  font-family: var(--display);
+  font-optical-sizing: auto;
+  font-weight: 600;
+  font-size: 32px;
+  letter-spacing: -0.01em;
+}
+.wordmark span { color: var(--accent); }
+
+.topbar-tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.search-input {
+  font-family: var(--mono);
+  font-size: 13px;
+  padding: 9px 14px;
+  border: 1.5px solid var(--ink);
+  border-radius: 3px;
+  background: var(--paper-card);
+  min-width: 220px;
+}
+.search-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.tag-filter {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tag-chip {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  cursor: pointer;
+  background: transparent;
+  transition: transform 0.08s ease;
+}
+.tag-chip:hover { transform: translateY(-1px); }
+.tag-chip.active {
+  color: var(--paper-card) !important;
+  background: currentColor;
+}
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+
+.card {
+  position: relative;
+  background: var(--paper-card);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 18px 16px 16px;
+  box-shadow: 2px 3px 0 rgba(35, 40, 46, 0.06);
+  transform: rotate(var(--tilt, 0deg));
+}
+
+.card::before {
+  content: "";
+  position: absolute;
+  top: -7px;
+  left: 20px;
+  width: 34px;
+  height: 14px;
+  background: var(--tape, var(--accent-soft));
+  opacity: 0.85;
+  transform: rotate(-3deg);
+}
+
+.card-meta {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.card-title {
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 16px;
+  margin: 0 0 6px;
+}
+
+.card-body {
+  font-size: 14.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.card-body .list-item {
+  display: block;
+  padding: 2px 0;
+}
+
+.card-tags {
+  margin-top: 12px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.card-tag {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.empty-state {
+  text-align: center;
+  padding: 80px 20px;
+  color: var(--ink-soft);
+}
+.empty-state p { margin: 4px 0; }
+.empty-sub { font-family: var(--mono); font-size: 13px; }
+
+.composer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px;
+  background: var(--ink);
+  border-top: 3px solid var(--accent);
+}
+
+.composer-caret {
+  font-family: var(--mono);
+  color: var(--accent-soft);
+  font-size: 18px;
+}
+
+.composer input {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 14px;
+  background: transparent;
+  border: none;
+  color: #F4F1EA;
+  padding: 10px 4px;
+}
+.composer input::placeholder { color: #8B9198; }
+.composer input:focus { outline: none; }
+
+.composer button {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--accent-soft);
+  border: none;
+  border-radius: 3px;
+  padding: 9px 16px;
+  cursor: pointer;
+}
+.composer button:hover { background: #fff; }
+
+@media (max-width: 520px) {
+  .topbar { flex-direction: column; align-items: flex-start; }
+  .search-input { width: 100%; }
+}
