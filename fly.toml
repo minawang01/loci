@@ -1,5 +1,7 @@
 # Fly.io deployment config. `app` must match the app created with `fly launch`.
-app = "loci"
+# "loci" was already taken on Fly; the hostname is only cosmetic behind the
+# custom domain.
+app = "loci-notes"
 primary_region = "sjc"
 
 [build]
