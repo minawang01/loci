@@ -1,5 +1,5 @@
 # Fly.io deployment config. `app` must match the app created with `fly launch`.
-app = "mindchuk"
+app = "loci"
 primary_region = "sjc"
 
 [build]
@@ -11,7 +11,7 @@ primary_region = "sjc"
   # Non-secret half of the rclone config; the token goes in `fly secrets set`.
   RCLONE_CONFIG_DRIVE_TYPE = "drive"
   RCLONE_CONFIG_DRIVE_SCOPE = "drive.file"
-  BACKUP_REMOTE = "drive:mindchuk"
+  BACKUP_REMOTE = "drive:loci"
   BACKUP_INTERVAL_MINUTES = "15"
 
 [http_service]
@@ -31,7 +31,7 @@ primary_region = "sjc"
 
 # notes.md and tags.json live here so they survive redeploys.
 [[mounts]]
-  source = "mindchuk_data"
+  source = "loci_data"
   destination = "/data"
 
 [[vm]]

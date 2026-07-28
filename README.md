@@ -1,4 +1,4 @@
-# mindchuk
+# loci
 
 Personal text-to-note app: text or WhatsApp a message to your Twilio number, and
 it lands in a single human-readable `notes.md` file. A small dashboard lets you
@@ -50,7 +50,7 @@ All of these are documented in `.env.example`.
 | `PORT` | no | defaults to 3000 |
 | `NODE_ENV` | **in production** | set to `production` to enforce validation + auth |
 | `DATA_DIR` | no | where `notes.md`/`tags.json` live; defaults to `./data` |
-| `DASHBOARD_USER` | no | basic-auth user, defaults to `mindchuk` |
+| `DASHBOARD_USER` | no | basic-auth user, defaults to `loci` |
 | `DASHBOARD_PASSWORD` | **in production** | basic-auth password for dashboard and `/api` |
 | `BACKUP_REMOTE` | no | rclone `remote:path` to mirror `DATA_DIR` into; backups are off when unset |
 | `BACKUP_INTERVAL_MINUTES` | no | defaults to 15 |
@@ -79,7 +79,7 @@ for a 1 GB volume. Render's free tier and Railway's trial both fall short (see
 curl -L https://fly.io/install.sh | sh
 fly auth login
 fly launch --no-deploy            # accept the existing fly.toml; pick an app name
-fly volumes create mindchuk_data --size 1 --region sjc
+fly volumes create loci_data --size 1 --region sjc
 
 fly secrets set \
   TWILIO_ACCOUNT_SID=AC... \
@@ -96,15 +96,15 @@ curl https://<app-name>.fly.dev/health   # {"ok":true}
 
 `fly.toml` already sets `NODE_ENV=production`, `DATA_DIR=/data`,
 `min_machines_running = 1` (no cold starts for Twilio), and mounts the
-`mindchuk_data` volume at `/data`.
+`loci_data` volume at `/data`.
 
 ### Custom domain under minawang.com
 
 ```bash
-fly certs add mindchuk.minawang.com    # prints the DNS records to create
+fly certs add loci.minawang.com    # prints the DNS records to create
 # add the CNAME/A+AAAA records at your DNS provider, then:
-fly certs show mindchuk.minawang.com
-fly secrets set PUBLIC_URL=https://mindchuk.minawang.com
+fly certs show loci.minawang.com
+fly secrets set PUBLIC_URL=https://loci.minawang.com
 ```
 
 Update the webhook URL in the Twilio Console to match, or signature validation
@@ -145,12 +145,12 @@ fly secrets set RCLONE_CONFIG_DRIVE_TOKEN='<the JSON blob>'
 ```
 
 `fly.toml` already sets the non-secret half (`RCLONE_CONFIG_DRIVE_TYPE=drive`,
-`RCLONE_CONFIG_DRIVE_SCOPE=drive.file`, `BACKUP_REMOTE=drive:mindchuk`). rclone
+`RCLONE_CONFIG_DRIVE_SCOPE=drive.file`, `BACKUP_REMOTE=drive:loci`). rclone
 builds its whole config from those `RCLONE_CONFIG_DRIVE_*` variables, so there is
 no `rclone.conf` to manage on the host. `drive.file` scope means the app can only
 see files it created — it has no access to the rest of your Drive.
 
-After `fly deploy`, `fly logs` shows `Backed up /data to drive:mindchuk` on
+After `fly deploy`, `fly logs` shows `Backed up /data to drive:loci` on
 startup and then once per interval; failures are logged and never affect request
 handling. Run one on demand with `npm run backup` (locally) or
 `fly ssh console -C "npm run backup"`.
@@ -158,7 +158,7 @@ handling. Run one on demand with `npm run backup` (locally) or
 ### Restoring
 
 ```bash
-fly ssh console -C "rclone copy drive:mindchuk /data"
+fly ssh console -C "rclone copy drive:loci /data"
 # or pull a copy down to your laptop
 fly ssh sftp get /data/notes.md ./notes.md
 ```

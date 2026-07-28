@@ -1,5 +1,5 @@
 {
-  "name": "mindchuk",
+  "name": "loci",
   "version": "0.1.0",
   "description": "Personal text-to-note app: SMS/WhatsApp in, markdown notes out.",
   "main": "server.js",

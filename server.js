@@ -51,7 +51,7 @@ app.use('/api', basicAuth, apiRoutes);
 app.use(basicAuth, express.static(path.join(__dirname, 'public')));
 
 app.listen(PORT, () => {
-  console.log(`Mindchuk server running on port ${PORT}`);
+  console.log(`Loci server running on port ${PORT}`);
   console.log(`Notes and tags are stored in ${DATA_DIR}`);
   const publicUrl = process.env.PUBLIC_URL || `http://localhost:${PORT}`;
   console.log(`Twilio webhook URL to configure: ${publicUrl.replace(/\/$/, '')}/webhook/sms`);
