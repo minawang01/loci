@@ -8,6 +8,11 @@ primary_region = "sjc"
   NODE_ENV = "production"
   PORT = "8080"
   DATA_DIR = "/data"
+  # Non-secret half of the rclone config; the token goes in `fly secrets set`.
+  RCLONE_CONFIG_DRIVE_TYPE = "drive"
+  RCLONE_CONFIG_DRIVE_SCOPE = "drive.file"
+  BACKUP_REMOTE = "drive:mindchuk"
+  BACKUP_INTERVAL_MINUTES = "15"
 
 [http_service]
   internal_port = 8080

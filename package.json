@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "backup": "node -e \"require('dotenv').config(); require('./lib/backup').runBackup()\""
   },
   "dependencies": {
     "body-parser": "^1.20.2",

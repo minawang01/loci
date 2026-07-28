@@ -7,6 +7,7 @@ const webhookRoutes = require('./routes/webhook');
 const apiRoutes = require('./routes/api');
 const { basicAuth } = require('./lib/auth');
 const { DATA_DIR, ensureDataDir } = require('./lib/paths');
+const { startBackups } = require('./lib/backup');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -35,6 +36,7 @@ function assertProductionConfig() {
 
 if (IS_PRODUCTION) assertProductionConfig();
 ensureDataDir();
+startBackups();
 
 app.use(bodyParser.urlencoded({ extended: false })); // Twilio posts form-encoded
 app.use(bodyParser.json());

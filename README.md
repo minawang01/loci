@@ -52,6 +52,9 @@ All of these are documented in `.env.example`.
 | `DATA_DIR` | no | where `notes.md`/`tags.json` live; defaults to `./data` |
 | `DASHBOARD_USER` | no | basic-auth user, defaults to `mindchuk` |
 | `DASHBOARD_PASSWORD` | **in production** | basic-auth password for dashboard and `/api` |
+| `BACKUP_REMOTE` | no | rclone `remote:path` to mirror `DATA_DIR` into; backups are off when unset |
+| `BACKUP_INTERVAL_MINUTES` | no | defaults to 15 |
+| `RCLONE_CONFIG_DRIVE_*` | for backups | rclone remote config, including the OAuth token |
 | `WEBHOOK_RATE_LIMIT` | no | inbound requests per minute per IP, defaults to 30 |
 | `SKIP_TWILIO_VALIDATION` | no | local-only escape hatch; rejected at startup in production |
 
@@ -66,7 +69,8 @@ password sent as an `x-dashboard-secret` header for scripts).
 ## Deploying (Fly.io)
 
 Fly is the cheapest option that is both always-on and has a real persistent
-filesystem — roughly $2/month for a `shared-cpu-1x` 256 MB machine plus ~$0.15
+filesystem (see [Persistence and backup](#persistence-and-backup) for how the
+notes get off the host) — roughly $2/month for a `shared-cpu-1x` 256 MB machine plus ~$0.15
 for a 1 GB volume. Render's free tier and Railway's trial both fall short (see
 [Host trade-offs](#host-trade-offs)).
 
@@ -79,6 +83,7 @@ fly volumes create mindchuk_data --size 1 --region sjc
 
 fly secrets set \
   TWILIO_ACCOUNT_SID=AC... \
+  RCLONE_CONFIG_DRIVE_TOKEN='<json from rclone authorize "drive">' \
   TWILIO_AUTH_TOKEN=... \
   TWILIO_SMS_NUMBER=+1555... \
   TWILIO_WHATSAPP_NUMBER=whatsapp:+14155238886 \
@@ -117,28 +122,59 @@ fly status
 Changing a secret (`fly secrets set ...`) restarts the app on its own — no
 deploy needed. The volume is not touched by deploys, so notes persist.
 
-## Persistence and syncing
+## Persistence and backup
 
-`notes.md` and `tags.json` live in `DATA_DIR`, which is the Fly volume at
-`/data`. Constraints worth knowing:
+`notes.md` and `tags.json` live in `DATA_DIR`, which is the Fly volume mounted at
+`/data`. The volume survives `fly deploy` and machine restarts. A Fly volume is
+attached to a single machine, so keep this app at one machine
+(`min_machines_running = 1`, no scaling out).
 
-- A Fly volume is attached to a single machine, so keep this app at one machine
-  (`min_machines_running = 1`, no scaling out). Volumes are not backed up by
-  default; `fly volumes snapshots list <volume-id>` shows the daily snapshots
-  Fly takes, and you can also copy the file down yourself.
-- Pull the current file locally (this is the simplest "sync to Dropbox/Drive"
-  path — write it into your synced folder and run it on a cron):
+That is persistence, not backup — so the app also mirrors `DATA_DIR` to Google
+Drive with `rclone` every `BACKUP_INTERVAL_MINUTES` (default 15). Backups are
+skipped entirely unless `BACKUP_REMOTE` is set, so local development is
+unaffected.
 
-  ```bash
-  fly ssh console -C "cat /data/notes.md" > ~/Dropbox/mindchuk/notes.md
-  # or, for the whole directory
-  fly ssh sftp get /data/notes.md ~/Dropbox/mindchuk/notes.md
-  ```
+### One-time Google Drive setup
 
-- True two-way sync (editing the file in Dropbox and having the app see it) is
-  not possible with a Fly volume — the host filesystem is not reachable by
-  Dropbox/Drive clients. If you want that, the app would need to read/write
-  through a cloud-storage API instead, which is a bigger change than this task.
+```bash
+# on your laptop, where a browser is available
+rclone authorize "drive"
+# approve in the browser; it prints a JSON blob containing a refresh token
+
+fly secrets set RCLONE_CONFIG_DRIVE_TOKEN='<the JSON blob>'
+```
+
+`fly.toml` already sets the non-secret half (`RCLONE_CONFIG_DRIVE_TYPE=drive`,
+`RCLONE_CONFIG_DRIVE_SCOPE=drive.file`, `BACKUP_REMOTE=drive:mindchuk`). rclone
+builds its whole config from those `RCLONE_CONFIG_DRIVE_*` variables, so there is
+no `rclone.conf` to manage on the host. `drive.file` scope means the app can only
+see files it created — it has no access to the rest of your Drive.
+
+After `fly deploy`, `fly logs` shows `Backed up /data to drive:mindchuk` on
+startup and then once per interval; failures are logged and never affect request
+handling. Run one on demand with `npm run backup` (locally) or
+`fly ssh console -C "npm run backup"`.
+
+### Restoring
+
+```bash
+fly ssh console -C "rclone copy drive:mindchuk /data"
+# or pull a copy down to your laptop
+fly ssh sftp get /data/notes.md ./notes.md
+```
+
+### Two caveats
+
+- The mirror is **one-way** (Fly → Drive). Fly is the source of truth, so
+  editing `notes.md` in Drive will be overwritten by the next backup. True
+  two-way sync would mean reading and writing through the Drive API on every
+  request instead of the filesystem — a rewrite of `lib/notes.js`, deliberately
+  out of scope.
+- `rclone copy` never deletes on the remote, so a note deleted on Fly stays in
+  the Drive copy. That is the desirable behaviour for a backup: a bad local
+  state can't destroy it.
+- Fly also takes its own daily volume snapshots — `fly volumes snapshots list
+  <volume-id>` — as a second line of defence.
 
 ### Host trade-offs
 
