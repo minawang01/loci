@@ -11,6 +11,19 @@ browse, search, and add notes from a browser.
 - `routes/api.js` — JSON API behind basic auth
 - `public/` — dashboard, also behind basic auth
 
+## Current deployment
+
+| | |
+| --- | --- |
+| URL | https://loci-notes.fly.dev |
+| Fly app | `loci-notes`, personal org, 1 machine in `sjc` (`loci` was taken) |
+| Volume | `loci_data`, mounted at `/data` |
+| SMS number | `+1 641 381 9773`, webhook set to `POST /webhook/sms` |
+| Dashboard | user `loci`, password in the `DASHBOARD_PASSWORD` Fly secret |
+
+Still outstanding: the WhatsApp sandbox webhook (Console-only, see below) and
+`RCLONE_CONFIG_DRIVE_TOKEN` for backups.
+
 ## Message formats
 
 | You text | Result |
