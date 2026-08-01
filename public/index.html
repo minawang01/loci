@@ -3,35 +3,48 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>loci — notes</title>
+<title>loci</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,300;0,400;0,500;1,400;1,500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
+  <div class="texture" aria-hidden="true"></div>
+
   <div class="app">
     <header class="topbar">
-      <div class="wordmark">lo<span>ci</span></div>
-      <div class="topbar-tools">
-        <input id="search" class="search-input" type="text" placeholder="search notes, tags…" />
-        <div class="tag-filter" id="tagFilter"></div>
-      </div>
+      <div class="wordmark">loci</div>
     </header>
 
-    <main class="board" id="board">
-      <!-- note cards injected here -->
-    </main>
+    <section class="feed" id="feed">
+      <div class="search">
+        <span class="search-glyph" aria-hidden="true">⌕</span>
+        <input id="search" type="text" placeholder="Search by word, date, or theme..." autocomplete="off" />
+      </div>
 
-    <div class="empty-state" id="emptyState" hidden>
-      <p>No notes yet.</p>
-      <p class="empty-sub">Text your loci number, or write one below.</p>
-    </div>
+      <div class="tag-filter" id="tagFilter"></div>
+
+      <div class="board" id="board"></div>
+
+      <div class="empty-state" id="emptyState" hidden>
+        <p>Nothing here yet.</p>
+        <p class="empty-sub">Text your loci number, or write one below.</p>
+      </div>
+    </section>
+
+    <section class="detail" id="detail" hidden>
+      <button class="back" id="back" type="button"><span>←</span><span>Back to the feed</span></button>
+      <div class="detail-meta" id="detailMeta"></div>
+      <p class="detail-title" id="detailTitle"></p>
+      <div class="detail-items" id="detailItems"></div>
+      <div class="detail-tags" id="detailTags"></div>
+    </section>
   </div>
 
   <form class="composer" id="composer">
-    <span class="composer-caret">&gt;</span>
-    <input id="composerInput" type="text" placeholder="type a note… use #tag to file it under a tag" autocomplete="off" />
-    <button type="submit">send</button>
+    <input id="composerInput" type="text" placeholder="Write a note… use #tag to file it" autocomplete="off" />
+    <button type="submit">Save</button>
   </form>
 
   <script src="/app.js"></script>

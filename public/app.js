@@ -1,29 +1,23 @@
 const board = document.getElementById('board');
 const emptyState = document.getElementById('emptyState');
+const feed = document.getElementById('feed');
+const detail = document.getElementById('detail');
+const detailMeta = document.getElementById('detailMeta');
+const detailTitle = document.getElementById('detailTitle');
+const detailItems = document.getElementById('detailItems');
+const detailTags = document.getElementById('detailTags');
+const backButton = document.getElementById('back');
 const searchInput = document.getElementById('search');
 const tagFilterEl = document.getElementById('tagFilter');
 const composer = document.getElementById('composer');
 const composerInput = document.getElementById('composerInput');
 
+const PREVIEW_ITEMS = 4;
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
 let activeTag = null;
-let allTags = [];
-
-const TAPE_COLORS = ['#C7D4DD', '#E3C9B6', '#D6DCC1', '#E8D6E3', '#CFE0DD'];
-function tapeColorFor(tagName) {
-  if (!tagName) return null;
-  let hash = 0;
-  for (const ch of tagName) hash = (hash * 31 + ch.charCodeAt(0)) % 997;
-  return TAPE_COLORS[hash % TAPE_COLORS.length];
-}
-
-function renderBody(entry) {
-  const isList = entry.title.toLowerCase().startsWith('list:');
-  if (!isList) return escapeHtml(entry.body);
-  return entry.body
-    .split('\n')
-    .map(line => `<span class="list-item">${escapeHtml(line)}</span>`)
-    .join('');
-}
+let entries = [];
+let selectedIndex = null;
 
 function escapeHtml(str) {
   return str
@@ -32,26 +26,101 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;');
 }
 
-function renderNotes(entries) {
+// "2026-08-01 02:12" -> { date: "Aug 1", time: "2:12 AM" }
+function formatStamp(dateTime) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/.exec(dateTime || '');
+  if (!match) return { date: dateTime || '', time: '' };
+  const [, , month, day, hour, minute] = match;
+  const h = Number(hour);
+  const suffix = h < 12 ? 'AM' : 'PM';
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return {
+    date: `${MONTHS[Number(month) - 1]} ${Number(day)}`,
+    time: `${hour12}:${minute} ${suffix}`
+  };
+}
+
+// A list entry keeps its name in the title and its checklist in the body;
+// a plain note has no name, so its first line stands in as the title.
+function shapeEntry(entry) {
+  const stamp = formatStamp(entry.dateTime);
+  const lines = entry.body.split('\n').filter(line => line.trim());
+  const isList = /^list:/i.test(entry.title);
+
+  if (isList) {
+    return {
+      ...stamp,
+      title: entry.title.replace(/^list:\s*/i, ''),
+      tags: entry.tags,
+      items: lines.map(line => {
+        const checkbox = /^-\s*\[([ xX])\]\s*(.*)$/.exec(line);
+        if (!checkbox) return { text: line.replace(/^-\s*/, ''), done: false, marker: '–' };
+        const done = checkbox[1].toLowerCase() === 'x';
+        return { text: checkbox[2], done, marker: done ? '✓' : '–' };
+      })
+    };
+  }
+
+  return {
+    ...stamp,
+    title: lines[0] || '',
+    tags: entry.tags,
+    items: lines.slice(1).map(text => ({ text, done: false, marker: '' }))
+  };
+}
+
+function itemHtml(item) {
+  return `
+    <div class="item${item.done ? ' done' : ''}">
+      ${item.marker ? `<span class="marker">${item.marker}</span>` : ''}
+      <span class="text">${escapeHtml(item.text)}</span>
+    </div>`;
+}
+
+function renderFeed() {
   board.innerHTML = '';
   emptyState.hidden = entries.length > 0;
-  entries.forEach((entry, i) => {
-    const card = document.createElement('div');
-    card.className = 'card';
-    card.style.setProperty('--tilt', `${(i % 5) - 2}deg`);
-    const primaryTag = entry.tags[0];
-    if (primaryTag) card.style.setProperty('--tape', tapeColorFor(primaryTag));
 
+  entries.forEach((raw, index) => {
+    const entry = shapeEntry(raw);
+    const hidden = Math.max(0, entry.items.length - PREVIEW_ITEMS);
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'card';
+    card.dataset.index = index;
     card.innerHTML = `
-      <div class="card-meta"><span>${entry.dateTime || ''}</span></div>
-      <h3 class="card-title">${escapeHtml(entry.title)}</h3>
-      <div class="card-body">${renderBody(entry)}</div>
-      <div class="card-tags">
-        ${entry.tags.map(t => `<span class="card-tag">${escapeHtml(t)}</span>`).join('')}
+      <div class="card-meta">
+        <span class="card-date">${escapeHtml(entry.date)} · ${escapeHtml(entry.time)}</span>
+        ${entry.tags[0] ? `<span class="card-tag">${escapeHtml(entry.tags[0])}</span>` : ''}
       </div>
+      ${entry.title ? `<div class="card-title">${escapeHtml(entry.title)}</div>` : ''}
+      <div class="card-items">
+        ${entry.items.slice(0, PREVIEW_ITEMS).map(itemHtml).join('')}
+      </div>
+      ${hidden ? `<div class="more">+${hidden} more</div>` : ''}
     `;
     board.appendChild(card);
   });
+}
+
+function showDetail(index) {
+  const entry = shapeEntry(entries[index]);
+  selectedIndex = index;
+  detailMeta.textContent = `${entry.date} · ${entry.time}`;
+  detailTitle.textContent = entry.title;
+  detailItems.innerHTML = entry.items.map(itemHtml).join('');
+  detailTags.innerHTML = entry.tags
+    .map(tag => `<span>${escapeHtml(tag)}</span>`)
+    .join('');
+  feed.hidden = true;
+  detail.hidden = false;
+  window.scrollTo(0, 0);
+}
+
+function showFeed() {
+  selectedIndex = null;
+  detail.hidden = true;
+  feed.hidden = false;
 }
 
 async function loadNotes() {
@@ -59,25 +128,34 @@ async function loadNotes() {
   if (searchInput.value.trim()) params.set('q', searchInput.value.trim());
   if (activeTag) params.set('tag', activeTag);
   const res = await fetch(`/api/notes?${params.toString()}`);
-  const entries = await res.json();
-  renderNotes(entries);
+  entries = await res.json();
+  renderFeed();
 }
 
 async function loadTags() {
   const res = await fetch('/api/tags');
-  allTags = await res.json();
-  tagFilterEl.innerHTML = allTags
+  const tags = await res.json();
+  tagFilterEl.innerHTML = tags
     .map(
-      t => `<button class="tag-chip${t.name === activeTag ? ' active' : ''}" style="color:${t.color}" data-tag="${t.name}">${t.name}</button>`
+      tag =>
+        `<button type="button" class="tag-chip${tag.name === activeTag ? ' active' : ''}" data-tag="${escapeHtml(tag.name)}">${escapeHtml(tag.name)}</button>`
     )
     .join('');
 }
 
+board.addEventListener('click', e => {
+  const card = e.target.closest('.card');
+  if (card) showDetail(Number(card.dataset.index));
+});
+
+backButton.addEventListener('click', showFeed);
+
 tagFilterEl.addEventListener('click', e => {
-  const btn = e.target.closest('.tag-chip');
-  if (!btn) return;
-  const tag = btn.dataset.tag;
+  const chip = e.target.closest('.tag-chip');
+  if (!chip) return;
+  const tag = chip.dataset.tag;
   activeTag = activeTag === tag ? null : tag;
+  showFeed();
   loadTags();
   loadNotes();
 });
@@ -85,7 +163,10 @@ tagFilterEl.addEventListener('click', e => {
 let searchDebounce;
 searchInput.addEventListener('input', () => {
   clearTimeout(searchDebounce);
-  searchDebounce = setTimeout(loadNotes, 200);
+  searchDebounce = setTimeout(() => {
+    showFeed();
+    loadNotes();
+  }, 200);
 });
 
 composer.addEventListener('submit', async e => {
@@ -98,10 +179,16 @@ composer.addEventListener('submit', async e => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text })
   });
+  showFeed();
   await loadTags();
   await loadNotes();
 });
 
 loadTags();
 loadNotes();
-setInterval(loadNotes, 15000); // pick up notes texted in from your phone
+
+// Pick up notes texted in from your phone, but never yank the feed out from
+// under someone who is reading a single entry.
+setInterval(() => {
+  if (selectedIndex === null) loadNotes();
+}, 15000);
