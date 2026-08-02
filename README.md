@@ -29,6 +29,7 @@ Still outstanding: the WhatsApp sandbox webhook (Console-only, see below) and
 | You text | Result |
 | --- | --- |
 | `#create list Groceries` + items on following lines | new checklist entry |
+| `#todo call the dentist` | appends a bullet to the list for that calendar day (`Todo YYYY-MM-DD`), creating it on the day's first item |
 | `avocados #grocery` | appends to the newest existing `grocery` list, otherwise saved as a tagged note |
 | `remember to call the dentist` | plain note, auto-tagged from the tag registry keywords |
 

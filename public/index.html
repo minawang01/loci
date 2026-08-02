@@ -17,21 +17,32 @@
       <div class="wordmark">loci</div>
     </header>
 
-    <section class="feed" id="feed">
-      <div class="search">
-        <span class="search-glyph" aria-hidden="true">⌕</span>
-        <input id="search" type="text" placeholder="Search by word, date, or theme..." autocomplete="off" />
-      </div>
+    <div class="layout" id="layout">
+      <section class="feed" id="feed">
+        <div class="search">
+          <span class="search-glyph" aria-hidden="true">⌕</span>
+          <input id="search" type="text" placeholder="Search by word, date, or theme..." autocomplete="off" />
+        </div>
 
-      <div class="tag-filter" id="tagFilter"></div>
+        <div class="tag-filter" id="tagFilter"></div>
 
-      <div class="board" id="board"></div>
+        <div class="board" id="board"></div>
 
-      <div class="empty-state" id="emptyState" hidden>
-        <p>Nothing here yet.</p>
-        <p class="empty-sub">Text your loci number, or write one below.</p>
-      </div>
-    </section>
+        <div class="empty-state" id="emptyState" hidden>
+          <p>Nothing here yet.</p>
+          <p class="empty-sub">Text your loci number, or write one below.</p>
+        </div>
+      </section>
+
+      <aside class="today" id="today">
+        <div class="today-head">
+          <span class="today-label">Today</span>
+          <span class="today-date" id="todayDate"></span>
+        </div>
+        <div class="today-items" id="todayItems"></div>
+        <p class="today-empty" id="todayEmpty">Nothing yet. Text <span>#todo</span> to add.</p>
+      </aside>
+    </div>
 
     <section class="detail" id="detail" hidden>
       <button class="back" id="back" type="button"><span>←</span><span>Back to the feed</span></button>
@@ -43,7 +54,7 @@
   </div>
 
   <form class="composer" id="composer">
-    <input id="composerInput" type="text" placeholder="Write a note… use #tag to file it" autocomplete="off" />
+    <input id="composerInput" type="text" placeholder="Write a note… #tag to file it, #todo for today's list" autocomplete="off" />
     <button type="submit">Save</button>
   </form>
 

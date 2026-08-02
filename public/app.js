@@ -1,6 +1,9 @@
 const board = document.getElementById('board');
 const emptyState = document.getElementById('emptyState');
-const feed = document.getElementById('feed');
+const layout = document.getElementById('layout');
+const todayDateEl = document.getElementById('todayDate');
+const todayItemsEl = document.getElementById('todayItems');
+const todayEmptyEl = document.getElementById('todayEmpty');
 const detail = document.getElementById('detail');
 const detailMeta = document.getElementById('detailMeta');
 const detailTitle = document.getElementById('detailTitle');
@@ -18,6 +21,7 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 let activeTag = null;
 let entries = [];
 let selectedIndex = null;
+let todayListTitle = null;
 
 function escapeHtml(str) {
   return str
@@ -112,7 +116,7 @@ function showDetail(index) {
   detailTags.innerHTML = entry.tags
     .map(tag => `<span>${escapeHtml(tag)}</span>`)
     .join('');
-  feed.hidden = true;
+  layout.hidden = true;
   detail.hidden = false;
   window.scrollTo(0, 0);
 }
@@ -120,7 +124,7 @@ function showDetail(index) {
 function showFeed() {
   selectedIndex = null;
   detail.hidden = true;
-  feed.hidden = false;
+  layout.hidden = false;
 }
 
 async function loadNotes() {
@@ -128,8 +132,23 @@ async function loadNotes() {
   if (searchInput.value.trim()) params.set('q', searchInput.value.trim());
   if (activeTag) params.set('tag', activeTag);
   const res = await fetch(`/api/notes?${params.toString()}`);
-  entries = await res.json();
+  const all = await res.json();
+  // Today's todo list has its own column, so keep it out of the feed — but
+  // leave it in search and tag results, where hiding a match would be wrong.
+  const filtering = params.has('q') || params.has('tag');
+  entries = filtering ? all : all.filter(entry => entry.title !== todayListTitle);
   renderFeed();
+}
+
+async function loadToday() {
+  const res = await fetch('/api/todos/today');
+  const { name, entry } = await res.json();
+  todayListTitle = `List: ${name}`;
+  todayDateEl.textContent = formatStamp(`${name.replace(/^Todo\s*/, '')} 00:00`).date;
+
+  const items = entry ? shapeEntry(entry).items : [];
+  todayItemsEl.innerHTML = items.map(itemHtml).join('');
+  todayEmptyEl.hidden = items.length > 0;
 }
 
 async function loadTags() {
@@ -181,14 +200,15 @@ composer.addEventListener('submit', async e => {
   });
   showFeed();
   await loadTags();
+  await loadToday();
   await loadNotes();
 });
 
 loadTags();
-loadNotes();
+loadToday().then(loadNotes);
 
 // Pick up notes texted in from your phone, but never yank the feed out from
 // under someone who is reading a single entry.
 setInterval(() => {
-  if (selectedIndex === null) loadNotes();
+  if (selectedIndex === null) loadToday().then(loadNotes);
 }, 15000);

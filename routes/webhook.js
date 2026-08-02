@@ -72,9 +72,19 @@ router.post('/sms', webhookLimiter, validateTwilioRequest, (req, res) => {
     return res.type('text/xml').send(twiml(`Created list "${listName}" with ${items.length} item(s).`));
   }
 
-  // 2. Add item to an existing list via trailing hashtag, e.g. "avocados #grocery"
+  // 2. "#todo <item>" goes onto the list for the day it was sent
+  if (/^#todo\b/i.test(body)) {
+    const item = body.replace(/^#todo\b/i, '').trim();
+    if (!item) {
+      return res.type('text/xml').send(twiml('Send "#todo" followed by what you need to do.'));
+    }
+    notes.addToDailyTodo(item);
+    return res.type('text/xml').send(twiml(`Added "${item}" to today's todo list.`));
+  }
+
+  // 3. Add item to an existing list via trailing hashtag, e.g. "avocados #grocery"
   // Only routes here if that list already exists — otherwise falls through to
-  // note 3 below and gets saved as a regular tagged note.
+  // rule 4 below and gets saved as a regular tagged note.
   const trailingTagMatch = body.match(/#(\w+)\s*$/);
   if (trailingTagMatch) {
     const tagName = trailingTagMatch[1];
@@ -84,7 +94,7 @@ router.post('/sms', webhookLimiter, validateTwilioRequest, (req, res) => {
     }
   }
 
-  // 3. Plain note
+  // 4. Plain note
   const detectedTags = tags.detectTags(body);
   notes.appendNote(body, detectedTags);
   return res.type('text/xml').send(
