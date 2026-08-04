@@ -87,6 +87,12 @@ same password sent as an `x-dashboard-secret` header:
 curl -u loci:'<password>' https://loci-notes.fly.dev/api/notes
 ```
 
+Those header credentials are honoured only for non-browser clients (requests
+without `Sec-Fetch-*` headers). A browser that has ever been given basic-auth
+credentials for the origin replays them on every request, which would
+re-authenticate you the moment you signed out — so in a browser the session
+cookie is the only thing that counts.
+
 Deleting a note (the `×` on a card, or **Delete** in the detail view) rewrites
 `notes.md` without that entry. There is no undo in the app — the safety net is
 the Google Drive backup, which keeps file version history.
