@@ -1,0 +1,41 @@
+# Fly.io deployment config. `app` must match the app created with `fly launch`.
+# "loci" was already taken on Fly; the hostname is only cosmetic behind the
+# custom domain.
+app = "loci-notes"
+primary_region = "sjc"
+
+[build]
+
+[env]
+  NODE_ENV = "production"
+  PORT = "8080"
+  DATA_DIR = "/data"
+  # Non-secret half of the rclone config; the token goes in `fly secrets set`.
+  RCLONE_CONFIG_DRIVE_TYPE = "drive"
+  RCLONE_CONFIG_DRIVE_SCOPE = "drive.file"
+  BACKUP_REMOTE = "drive:loci"
+  BACKUP_INTERVAL_MINUTES = "15"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Keep one machine up so Twilio never waits on a cold start.
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/health"
+
+# notes.md and tags.json live here so they survive redeploys.
+[[mounts]]
+  source = "loci_data"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

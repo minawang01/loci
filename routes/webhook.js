@@ -1,9 +1,20 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const twilio = require('twilio');
 const notes = require('../lib/notes');
 const tags = require('../lib/tags');
 
 const router = express.Router();
+
+// A personal number sends a handful of messages a minute at most; anything
+// beyond that on a public URL is abuse or a retry storm.
+const webhookLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: Number(process.env.WEBHOOK_RATE_LIMIT || 30),
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: 'Too many requests'
+});
 
 function twiml(message) {
   const response = new twilio.twiml.MessagingResponse();
@@ -11,21 +22,33 @@ function twiml(message) {
   return response.toString();
 }
 
-// Validates that the request really came from Twilio (skips if no auth token configured,
-// so local testing without Twilio still works).
+// Validates that the request really came from Twilio. Validation is mandatory
+// when NODE_ENV=production; outside production it can be skipped so local
+// testing works without Twilio credentials.
 function validateTwilioRequest(req, res, next) {
   const authToken = process.env.TWILIO_AUTH_TOKEN;
-  if (!authToken || process.env.SKIP_TWILIO_VALIDATION === 'true') return next();
+  const publicUrl = process.env.PUBLIC_URL;
+
+  if (process.env.NODE_ENV !== 'production') {
+    if (!authToken || !publicUrl || process.env.SKIP_TWILIO_VALIDATION === 'true') return next();
+  } else if (!authToken || !publicUrl) {
+    console.error('TWILIO_AUTH_TOKEN and PUBLIC_URL are required to validate webhook requests');
+    return res.status(500).send('Webhook validation is not configured');
+  }
 
   const signature = req.headers['x-twilio-signature'];
-  const url = `${process.env.PUBLIC_URL}${req.originalUrl}`;
-  const valid = twilio.validateRequest(authToken, signature, url, req.body);
+  // Twilio signs the exact URL it was configured with, which is the public
+  // origin plus the original path and query — not the internal request host.
+  const url = new URL(req.originalUrl, publicUrl).toString();
+  const valid =
+    typeof signature === 'string' &&
+    twilio.validateRequest(authToken, signature, url, req.body);
 
   if (!valid) return res.status(403).send('Invalid Twilio signature');
   next();
 }
 
-router.post('/sms', validateTwilioRequest, (req, res) => {
+router.post('/sms', webhookLimiter, validateTwilioRequest, (req, res) => {
   const body = (req.body.Body || '').trim();
 
   if (!body) {
@@ -49,9 +72,19 @@ router.post('/sms', validateTwilioRequest, (req, res) => {
     return res.type('text/xml').send(twiml(`Created list "${listName}" with ${items.length} item(s).`));
   }
 
-  // 2. Add item to an existing list via trailing hashtag, e.g. "avocados #grocery"
+  // 2. "#todo <item>" goes onto the list for the day it was sent
+  if (/^#todo\b/i.test(body)) {
+    const item = body.replace(/^#todo\b/i, '').trim();
+    if (!item) {
+      return res.type('text/xml').send(twiml('Send "#todo" followed by what you need to do.'));
+    }
+    notes.addToDailyTodo(item);
+    return res.type('text/xml').send(twiml(`Added "${item}" to today's todo list.`));
+  }
+
+  // 3. Add item to an existing list via trailing hashtag, e.g. "avocados #grocery"
   // Only routes here if that list already exists — otherwise falls through to
-  // note 3 below and gets saved as a regular tagged note.
+  // rule 4 below and gets saved as a regular tagged note.
   const trailingTagMatch = body.match(/#(\w+)\s*$/);
   if (trailingTagMatch) {
     const tagName = trailingTagMatch[1];
@@ -61,7 +94,7 @@ router.post('/sms', validateTwilioRequest, (req, res) => {
     }
   }
 
-  // 3. Plain note
+  // 4. Plain note
   const detectedTags = tags.detectTags(body);
   notes.appendNote(body, detectedTags);
   return res.type('text/xml').send(

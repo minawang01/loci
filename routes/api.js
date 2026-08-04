@@ -16,9 +16,23 @@ router.get('/notes', (req, res) => {
 router.post('/notes', (req, res) => {
   const { text, tags: manualTags = [] } = req.body;
   if (!text || !text.trim()) return res.status(400).json({ error: 'text is required' });
+
+  // Same "#todo" rule the SMS webhook applies, so both entry points agree.
+  const trimmed = text.trim();
+  if (/^#todo\b/i.test(trimmed)) {
+    const item = trimmed.replace(/^#todo\b/i, '').trim();
+    if (!item) return res.status(400).json({ error: 'todo item is required' });
+    notes.addToDailyTodo(item);
+    return res.status(201).json({ ok: true, list: notes.dailyTodoName() });
+  }
+
   const detected = Array.from(new Set([...tags.detectTags(text), ...manualTags]));
   notes.appendNote(text.trim(), detected);
   res.status(201).json({ ok: true, tags: detected });
+});
+
+router.get('/todos/today', (req, res) => {
+  res.json({ name: notes.dailyTodoName(), entry: notes.dailyTodo() });
 });
 
 router.post('/lists', (req, res) => {
