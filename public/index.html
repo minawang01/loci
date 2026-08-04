@@ -15,6 +15,7 @@
   <div class="app">
     <header class="topbar">
       <div class="wordmark">loci</div>
+      <button class="logout" id="logout" type="button">Sign out</button>
     </header>
 
     <div class="layout" id="layout">
@@ -45,7 +46,10 @@
     </div>
 
     <section class="detail" id="detail" hidden>
-      <button class="back" id="back" type="button"><span>←</span><span>Back to the feed</span></button>
+      <div class="detail-bar">
+        <button class="back" id="back" type="button"><span>←</span><span>Back to the feed</span></button>
+        <button class="detail-delete" id="detailDelete" type="button">Delete</button>
+      </div>
       <div class="detail-meta" id="detailMeta"></div>
       <p class="detail-title" id="detailTitle"></p>
       <div class="detail-items" id="detailItems"></div>

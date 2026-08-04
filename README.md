@@ -8,8 +8,8 @@ browse, search, and add notes from a browser.
 - `lib/notes.js` — appends notes/lists to `$DATA_DIR/notes.md`
 - `lib/tags.js` — tag registry (`$DATA_DIR/tags.json`) with keyword auto-tagging
 - `routes/webhook.js` — Twilio inbound webhook (`POST /webhook/sms`), signature-validated and rate-limited
-- `routes/api.js` — JSON API behind basic auth
-- `public/` — dashboard, also behind basic auth
+- `routes/api.js` — JSON API behind the auth gate
+- `public/` — dashboard and login page
 
 ## Current deployment
 
@@ -19,7 +19,7 @@ browse, search, and add notes from a browser.
 | Fly app | `loci-notes`, personal org, 1 machine in `sjc` (`loci` was taken) |
 | Volume | `loci_data`, mounted at `/data` |
 | SMS number | `+1 641 381 9773`, webhook set to `POST /webhook/sms` |
-| Dashboard | user `loci`, password in the `DASHBOARD_PASSWORD` Fly secret |
+| Dashboard | sign in at `/login` as user `loci`, password in the `DASHBOARD_PASSWORD` Fly secret |
 
 Still outstanding: the WhatsApp sandbox webhook (Console-only, see below) and
 `RCLONE_CONFIG_DRIVE_TOKEN` for backups.
@@ -64,8 +64,8 @@ All of these are documented in `.env.example`.
 | `PORT` | no | defaults to 3000 |
 | `NODE_ENV` | **in production** | set to `production` to enforce validation + auth |
 | `DATA_DIR` | no | where `notes.md`/`tags.json` live; defaults to `./data` |
-| `DASHBOARD_USER` | no | basic-auth user, defaults to `loci` |
-| `DASHBOARD_PASSWORD` | **in production** | basic-auth password for dashboard and `/api` |
+| `DASHBOARD_USER` | no | login user, defaults to `loci` |
+| `DASHBOARD_PASSWORD` | **in production** | login password for the dashboard and `/api` |
 | `BACKUP_REMOTE` | no | rclone `remote:path` to mirror `DATA_DIR` into; backups are off when unset |
 | `BACKUP_INTERVAL_MINUTES` | no | defaults to 15 |
 | `RCLONE_CONFIG_DRIVE_*` | for backups | rclone remote config, including the OAuth token |
@@ -76,9 +76,20 @@ In production the server **refuses to start** without `TWILIO_AUTH_TOKEN`,
 `PUBLIC_URL`, and `DASHBOARD_PASSWORD`, and refuses to start if
 `SKIP_TWILIO_VALIDATION=true`.
 
-`/health` is the only unauthenticated endpoint: `/webhook/sms` requires a valid
-Twilio signature, and the dashboard plus `/api` require basic auth (or the same
-password sent as an `x-dashboard-secret` header for scripts).
+`/health` and `/login` are the only unauthenticated endpoints: `/webhook/sms`
+requires a valid Twilio signature, and the dashboard plus `/api` require a
+session. Signing in at `/login` sets a signed, HTTP-only session cookie that
+lasts 30 days; changing `DASHBOARD_PASSWORD` invalidates every existing session.
+Scripts can skip the form and authenticate per request with basic auth or the
+same password sent as an `x-dashboard-secret` header:
+
+```bash
+curl -u loci:'<password>' https://loci-notes.fly.dev/api/notes
+```
+
+Deleting a note (the `×` on a card, or **Delete** in the detail view) rewrites
+`notes.md` without that entry. There is no undo in the app — the safety net is
+the Google Drive backup, which keeps file version history.
 
 ## Deploying (Fly.io)
 

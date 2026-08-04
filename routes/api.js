@@ -31,6 +31,14 @@ router.post('/notes', (req, res) => {
   res.status(201).json({ ok: true, tags: detected });
 });
 
+router.delete('/notes/:id', (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 0) return res.status(400).json({ error: 'invalid note id' });
+  const deleted = notes.deleteEntry(id, req.query.dateTime);
+  if (!deleted) return res.status(404).json({ error: 'note not found' });
+  res.json({ ok: true });
+});
+
 router.get('/todos/today', (req, res) => {
   res.json({ name: notes.dailyTodoName(), entry: notes.dailyTodo() });
 });

@@ -53,6 +53,17 @@ body {
   letter-spacing: 0.01em;
 }
 
+.logout {
+  font-family: var(--serif);
+  font-size: 12.5px;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+.logout:hover { color: var(--ink); }
+
 /* -- layout -- */
 
 .layout[hidden] { display: none; }
@@ -176,6 +187,7 @@ body {
 }
 
 .card {
+  position: relative;
   break-inside: avoid;
   margin-bottom: 20px;
   border: 1px solid var(--border);
@@ -189,6 +201,25 @@ body {
   color: var(--ink);
 }
 .card:hover { border-color: var(--ink); }
+.card:focus-visible { outline: 1px solid var(--ink); outline-offset: 2px; }
+
+.delete {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-family: var(--serif);
+  font-size: 17px;
+  line-height: 1;
+  padding: 4px 6px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0;
+}
+.card:hover .delete,
+.delete:focus-visible { opacity: 1; }
+.delete:hover { color: oklch(0.5 0.16 25); }
 
 .card-meta {
   display: flex;
@@ -256,6 +287,29 @@ body {
 
 /* -- detail -- */
 
+.detail-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 36px;
+}
+
+.detail-delete {
+  font-family: var(--serif);
+  font-size: 13px;
+  padding: 7px 15px;
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.detail-delete:hover {
+  border-color: oklch(0.5 0.16 25);
+  color: oklch(0.5 0.16 25);
+}
+
 .back {
   display: inline-flex;
   align-items: center;
@@ -267,7 +321,6 @@ body {
   font-family: var(--serif);
   font-size: 13px;
   color: var(--muted);
-  margin-bottom: 36px;
 }
 .back:hover { color: var(--ink); }
 

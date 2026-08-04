@@ -10,6 +10,8 @@ const detailTitle = document.getElementById('detailTitle');
 const detailItems = document.getElementById('detailItems');
 const detailTags = document.getElementById('detailTags');
 const backButton = document.getElementById('back');
+const detailDelete = document.getElementById('detailDelete');
+const logoutButton = document.getElementById('logout');
 const searchInput = document.getElementById('search');
 const tagFilterEl = document.getElementById('tagFilter');
 const composer = document.getElementById('composer');
@@ -22,6 +24,17 @@ let activeTag = null;
 let entries = [];
 let selectedIndex = null;
 let todayListTitle = null;
+
+// The session cookie can expire while a tab sits open; bounce to the login
+// page instead of quietly rendering an empty dashboard.
+async function api(path, options) {
+  const res = await fetch(path, options);
+  if (res.status === 401) {
+    window.location.replace('/login');
+    throw new Error('unauthenticated');
+  }
+  return res;
+}
 
 function escapeHtml(str) {
   return str
@@ -88,11 +101,14 @@ function renderFeed() {
   entries.forEach((raw, index) => {
     const entry = shapeEntry(raw);
     const hidden = Math.max(0, entry.items.length - PREVIEW_ITEMS);
-    const card = document.createElement('button');
-    card.type = 'button';
+    // A div rather than a button so the delete control can nest inside it.
+    const card = document.createElement('div');
     card.className = 'card';
+    card.setAttribute('role', 'button');
+    card.tabIndex = 0;
     card.dataset.index = index;
     card.innerHTML = `
+      <button type="button" class="delete" data-delete aria-label="Delete this note">×</button>
       <div class="card-meta">
         <span class="card-date">${escapeHtml(entry.date)} · ${escapeHtml(entry.time)}</span>
         ${entry.tags[0] ? `<span class="card-tag">${escapeHtml(entry.tags[0])}</span>` : ''}
@@ -131,7 +147,7 @@ async function loadNotes() {
   const params = new URLSearchParams();
   if (searchInput.value.trim()) params.set('q', searchInput.value.trim());
   if (activeTag) params.set('tag', activeTag);
-  const res = await fetch(`/api/notes?${params.toString()}`);
+  const res = await api(`/api/notes?${params.toString()}`);
   const all = await res.json();
   // Today's todo list has its own column, so keep it out of the feed — but
   // leave it in search and tag results, where hiding a match would be wrong.
@@ -141,7 +157,7 @@ async function loadNotes() {
 }
 
 async function loadToday() {
-  const res = await fetch('/api/todos/today');
+  const res = await api('/api/todos/today');
   const { name, entry } = await res.json();
   todayListTitle = `List: ${name}`;
   todayDateEl.textContent = formatStamp(`${name.replace(/^Todo\s*/, '')} 00:00`).date;
@@ -152,7 +168,7 @@ async function loadToday() {
 }
 
 async function loadTags() {
-  const res = await fetch('/api/tags');
+  const res = await api('/api/tags');
   const tags = await res.json();
   tagFilterEl.innerHTML = tags
     .map(
@@ -162,12 +178,50 @@ async function loadTags() {
     .join('');
 }
 
+// Deleting rewrites notes.md, which renumbers every entry after it, so the
+// feed is always reloaded rather than patched in place.
+async function deleteNote(index) {
+  const entry = entries[index];
+  const label = entry.title === 'Note' ? 'this note' : `"${entry.title}"`;
+  if (!window.confirm(`Delete ${label}? This cannot be undone.`)) return;
+
+  const res = await api(
+    `/api/notes/${entry.id}?dateTime=${encodeURIComponent(entry.dateTime)}`,
+    { method: 'DELETE' }
+  );
+  if (!res.ok) {
+    window.alert('Could not delete that note — it may have already changed. Reloading.');
+  }
+  showFeed();
+  await loadToday();
+  await loadNotes();
+}
+
 board.addEventListener('click', e => {
   const card = e.target.closest('.card');
-  if (card) showDetail(Number(card.dataset.index));
+  if (!card) return;
+  const index = Number(card.dataset.index);
+  if (e.target.closest('[data-delete]')) return deleteNote(index);
+  showDetail(index);
+});
+
+board.addEventListener('keydown', e => {
+  const card = e.target.closest('.card');
+  if (!card || (e.key !== 'Enter' && e.key !== ' ')) return;
+  e.preventDefault();
+  showDetail(Number(card.dataset.index));
 });
 
 backButton.addEventListener('click', showFeed);
+
+detailDelete.addEventListener('click', () => {
+  if (selectedIndex !== null) deleteNote(selectedIndex);
+});
+
+logoutButton.addEventListener('click', async () => {
+  await fetch('/logout', { method: 'POST' });
+  window.location.replace('/login');
+});
 
 tagFilterEl.addEventListener('click', e => {
   const chip = e.target.closest('.tag-chip');
@@ -193,7 +247,7 @@ composer.addEventListener('submit', async e => {
   const text = composerInput.value.trim();
   if (!text) return;
   composerInput.value = '';
-  await fetch('/api/notes', {
+  await api('/api/notes', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text })
