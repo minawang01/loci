@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>loci</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,300;0,400;0,500;1,400;1,500&display=swap" rel="stylesheet">
+<!-- Styles are inlined: /style.css sits behind the auth gate, and a login page
+     that half-loads its own stylesheet looks broken. -->
+<style>
+  :root {
+    --bg: #FAF9F9;
+    --ink: oklch(0.08 0 0);
+    --border: oklch(0.85 0 0);
+    --muted: oklch(0.4 0 0);
+    --serif: "Newsreader", Georgia, serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: var(--bg);
+    font-family: var(--serif);
+    color: var(--ink);
+  }
+
+  .texture {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.35;
+    background-image: repeating-linear-gradient(
+      45deg,
+      transparent 0 6px,
+      oklch(0.9 0.004 90) 6px 7px
+    );
+  }
+
+  .login {
+    position: relative;
+    width: 100%;
+    max-width: 320px;
+  }
+
+  .wordmark {
+    font-size: 30px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    margin-bottom: 8px;
+  }
+
+  .tagline {
+    font-size: 14px;
+    font-style: italic;
+    color: var(--muted);
+    margin: 0 0 40px;
+  }
+
+  label {
+    display: block;
+    font-size: 11.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 7px;
+  }
+
+  input {
+    width: 100%;
+    font-family: var(--serif);
+    font-size: 15px;
+    color: var(--ink);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 12px 15px;
+    margin-bottom: 20px;
+    outline: none;
+  }
+  input:focus { border-color: var(--ink); }
+
+  button {
+    width: 100%;
+    font-family: var(--serif);
+    font-size: 14px;
+    letter-spacing: 0.02em;
+    color: var(--bg);
+    background: var(--ink);
+    border: 1px solid var(--ink);
+    border-radius: 3px;
+    padding: 12px;
+    cursor: pointer;
+  }
+  button:hover { opacity: 0.85; }
+
+  .error {
+    font-size: 13px;
+    font-style: italic;
+    color: oklch(0.5 0.16 25);
+    margin: 16px 0 0;
+    min-height: 18px;
+  }
+</style>
+</head>
+<body>
+  <div class="texture" aria-hidden="true"></div>
+
+  <main class="login">
+    <div class="wordmark">loci</div>
+    <p class="tagline">Everything you texted yourself.</p>
+
+    <form id="loginForm">
+      <label for="username">Username</label>
+      <input id="username" name="username" type="text" autocomplete="username" autofocus required />
+
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required />
+
+      <button type="submit">Enter</button>
+      <p class="error" id="error" role="alert"></p>
+    </form>
+  </main>
+
+  <script>
+    const form = document.getElementById('loginForm');
+    const error = document.getElementById('error');
+
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      error.textContent = '';
+      const res = await fetch('/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: document.getElementById('username').value,
+          password: document.getElementById('password').value
+        })
+      });
+
+      if (res.ok) {
+        window.location.replace('/');
+        return;
+      }
+
+      const body = await res.json().catch(() => ({}));
+      error.textContent = body.error || 'Could not sign you in.';
+      document.getElementById('password').value = '';
+    });
+  </script>
+</body>
+</html>
