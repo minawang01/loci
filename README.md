@@ -69,6 +69,8 @@ All of these are documented in `.env.example`.
 | `BACKUP_REMOTE` | no | rclone `remote:path` to mirror `DATA_DIR` into; backups are off when unset |
 | `BACKUP_INTERVAL_MINUTES` | no | defaults to 15 |
 | `RCLONE_CONFIG_DRIVE_*` | for backups | rclone remote config, including the OAuth token |
+| `TWILIO_VERIFY_SERVICE_SID` | for phone sign-in | Verify service that sends the login code |
+| `LOGIN_PHONE_NUMBERS` | for phone sign-in | comma-separated E.164 numbers allowed to sign in |
 | `WEBHOOK_RATE_LIMIT` | no | inbound requests per minute per IP, defaults to 30 |
 | `SKIP_TWILIO_VALIDATION` | no | local-only escape hatch; rejected at startup in production |
 
@@ -92,6 +94,28 @@ without `Sec-Fetch-*` headers). A browser that has ever been given basic-auth
 credentials for the origin replays them on every request, which would
 re-authenticate you the moment you signed out — so in a browser the session
 cookie is the only thing that counts.
+
+### Signing in with a phone number
+
+The login page offers "Text me a code" when both `TWILIO_VERIFY_SERVICE_SID` and
+`LOGIN_PHONE_NUMBERS` are set; otherwise it is the password form alone. The code
+is sent through [Twilio Verify](https://www.twilio.com/docs/verify), which uses
+Twilio's own registered senders rather than `TWILIO_SMS_NUMBER` — so it is
+delivered even though outbound SMS from the loci number is blocked pending A2P
+10DLC registration. Each verification costs about $0.05.
+
+Create the service once (Console → Verify → Services, or via the API) and set
+both variables:
+
+```bash
+fly secrets set TWILIO_VERIFY_SERVICE_SID=VAxxxx LOGIN_PHONE_NUMBERS='+15551234567' --app loci-notes
+```
+
+Only listed numbers can sign in. A number that isn't listed gets the same
+"a code is on its way" response and no text, so the page never reveals who is
+allowed in. Requests are capped at 5 codes and 10 attempts per 15 minutes per
+IP, and a successful code sets exactly the same session cookie the password form
+does.
 
 Deleting a note (the `×` on a card, or **Delete** in the detail view) rewrites
 `notes.md` without that entry. There is no undo in the app — the safety net is

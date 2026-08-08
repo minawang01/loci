@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 
 const webhookRoutes = require('./routes/webhook');
@@ -12,6 +13,7 @@ const {
   setSessionCookie,
   clearSessionCookie
 } = require('./lib/auth');
+const otp = require('./lib/otp');
 const { DATA_DIR, ensureDataDir } = require('./lib/paths');
 const { startBackups } = require('./lib/backup');
 
@@ -66,6 +68,66 @@ app.post('/login', (req, res) => {
     return res.status(401).json({ error: 'Incorrect username or password' });
   }
   setSessionCookie(res, password);
+  res.json({ ok: true });
+});
+
+// Lets the login page hide the phone tab on deployments without Verify
+// configured. Deliberately says nothing about which numbers are allowed.
+app.get('/login/options', (req, res) => res.json({ otp: otp.otpEnabled() }));
+
+// Each code costs money to send and is a chance to guess, so both halves of the
+// flow are capped well below anything a real person needs.
+const otpStartLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Too many codes requested. Try again in a few minutes.' }
+});
+
+const otpCheckLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Too many attempts. Try again in a few minutes.' }
+});
+
+app.post('/login/otp/start', otpStartLimiter, async (req, res) => {
+  if (!otp.otpEnabled()) return res.status(404).json({ error: 'Phone sign-in is not configured' });
+
+  const phone = otp.normalizePhone(req.body.phone);
+  // Always answer as if the code was sent: telling a stranger which numbers are
+  // on the allowlist would hand them half the credential.
+  if (!otp.isAllowed(phone)) return res.json({ ok: true });
+
+  try {
+    await otp.sendCode(phone);
+  } catch (err) {
+    console.error('Failed to send verification code:', err.message);
+    return res.status(502).json({ error: 'Could not send a code. Try again shortly.' });
+  }
+  res.json({ ok: true });
+});
+
+app.post('/login/otp/check', otpCheckLimiter, async (req, res) => {
+  if (!otp.otpEnabled()) return res.status(404).json({ error: 'Phone sign-in is not configured' });
+
+  const phone = otp.normalizePhone(req.body.phone);
+  const code = String(req.body.code || '').trim();
+  const rejected = { error: 'That code is not valid' };
+  if (!otp.isAllowed(phone) || !/^\d{4,10}$/.test(code)) return res.status(401).json(rejected);
+
+  let approved = false;
+  try {
+    approved = await otp.checkCode(phone, code);
+  } catch (err) {
+    console.error('Failed to check verification code:', err.message);
+    return res.status(502).json({ error: 'Could not check that code. Try again shortly.' });
+  }
+  if (!approved) return res.status(401).json(rejected);
+
+  setSessionCookie(res, process.env.DASHBOARD_PASSWORD || '');
   res.json({ ok: true });
 });
 
