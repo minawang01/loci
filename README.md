@@ -34,11 +34,27 @@ Still outstanding: the WhatsApp sandbox webhook (Console-only, see below) and
 | `#goals finish the LSAT application by December 1` + optional `- subtask` lines | new goal with a parsed deadline and checklist, shown under the dashboard's Goals tab |
 | `#create list Groceries` + items on following lines | new checklist entry |
 | `#todo call the dentist` | appends a bullet to the list for that calendar day (`Todo YYYY-MM-DD`), creating it on the day's first item — each line of a multi-line message becomes its own item |
+| `#done emailed the professor` | crosses the closest matching item off that day's todo list, or adds it already crossed off |
 | `avocados #grocery` | appends to the newest existing `grocery` list, otherwise saved as a tagged note |
 | `remember to call the dentist` | plain note, auto-tagged from the tag registry keywords |
 
 Rules are matched in that order, so `#goals` wins over `#todo` when a message
 carries both.
+
+### Done
+
+`#done` closes the loop on `#todo`: it reads the same day-scoped list and adds
+no storage of its own. The text is matched against the list's items by keyword
+overlap (`lib/done.js`) — lowercased, punctuation stripped, stopwords dropped,
+crudely stemmed so "emailed" reaches "email". Two shared keywords is a match;
+one is only enough when a side has nothing else to offer, so `#done dishes`
+finds `- [ ] dishes` while `#done went for a walk` matches nothing. The best
+scoring item wins, preferring an unfinished one on a tie.
+
+A match is ticked off via the same `setItemDone` the dashboard checkboxes use.
+No match means the text is appended to the day's list already crossed off,
+creating that list if `#done` is the first thing you send all day — so the list
+stays a record of what happened, not just what was planned.
 
 ### Goals
 

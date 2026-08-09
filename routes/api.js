@@ -2,6 +2,7 @@ const express = require('express');
 const notes = require('../lib/notes');
 const tags = require('../lib/tags');
 const goals = require('../lib/goals');
+const done = require('../lib/done');
 const plan = require('../lib/plan');
 const sms = require('../lib/sms');
 
@@ -32,6 +33,12 @@ router.post('/notes', (req, res) => {
     if (!items.length) return res.status(400).json({ error: 'todo item is required' });
     notes.addToDailyTodo(items);
     return res.status(201).json({ ok: true, list: notes.dailyTodoName() });
+  }
+
+  if (/^#done\b/i.test(trimmed)) {
+    const result = done.markDone(trimmed.replace(/^#done\b/i, ''));
+    if (!result) return res.status(400).json({ error: 'tell me what you finished' });
+    return res.status(201).json({ ok: true, ...result });
   }
 
   const detected = Array.from(new Set([...tags.detectTags(text), ...manualTags]));

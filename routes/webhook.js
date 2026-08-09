@@ -4,6 +4,7 @@ const twilio = require('twilio');
 const notes = require('../lib/notes');
 const tags = require('../lib/tags');
 const goals = require('../lib/goals');
+const done = require('../lib/done');
 
 const router = express.Router();
 
@@ -97,7 +98,24 @@ router.post('/sms', webhookLimiter, validateTwilioRequest, (req, res) => {
     return res.type('text/xml').send(twiml(`Added ${summary} to today's todo list.`));
   }
 
-  // 4. Add item to an existing list via trailing hashtag, e.g. "avocados #grocery"
+  // 4. "#done <what you finished>" ticks the closest item off today's list,
+  // or records it as already finished when nothing on the list resembles it.
+  if (/^#done\b/i.test(body)) {
+    const text = body.replace(/^#done\b/i, '').trim();
+    const result = done.markDone(text);
+    if (!result) {
+      return res.type('text/xml').send(twiml('Send "#done" followed by what you finished.'));
+    }
+    return res.type('text/xml').send(
+      twiml(
+        result.matched
+          ? `Crossed off "${result.text}".`
+          : `Nothing on today's list matched, so "${result.text}" was added as done.`
+      )
+    );
+  }
+
+  // 5. Add item to an existing list via trailing hashtag, e.g. "avocados #grocery"
   // Only routes here if that list already exists — otherwise falls through to
   // rule 5 below and gets saved as a regular tagged note.
   const trailingTagMatch = body.match(/#(\w+)\s*$/);
@@ -109,7 +127,7 @@ router.post('/sms', webhookLimiter, validateTwilioRequest, (req, res) => {
     }
   }
 
-  // 5. Plain note
+  // 6. Plain note
   const detectedTags = tags.detectTags(body);
   notes.appendNote(body, detectedTags);
   return res.type('text/xml').send(
