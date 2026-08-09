@@ -30,6 +30,7 @@ let entries = [];
 let goals = [];
 let selectedIndex = null;
 let todayListTitle = null;
+let todayEntry = null;
 
 // The session cookie can expire while a tab sits open; bounce to the login
 // page instead of quietly rendering an empty dashboard.
@@ -71,33 +72,62 @@ function shapeEntry(entry) {
   const isList = /^list:/i.test(entry.title);
 
   if (isList) {
+    // checkIndex counts checkbox lines only, matching how the server addresses
+    // them; a stray non-checkbox line is rendered but not toggleable.
+    let checkIndex = -1;
     return {
       ...stamp,
+      id: entry.id,
+      dateTime: entry.dateTime,
       title: entry.title.replace(/^list:\s*/i, ''),
       tags: entry.tags,
       items: lines.map(line => {
-        const checkbox = /^-\s*\[([ xX])\]\s*(.*)$/.exec(line);
-        if (!checkbox) return { text: line.replace(/^-\s*/, ''), done: false, marker: '–' };
+        const checkbox = /^[-*]\s*\[([ xX])\]\s*(.*)$/.exec(line);
+        if (!checkbox) {
+          return { text: line.replace(/^[-*]\s*/, ''), done: false, marker: '–', checkIndex: null };
+        }
         const done = checkbox[1].toLowerCase() === 'x';
-        return { text: checkbox[2], done, marker: done ? '✓' : '–' };
+        return { text: checkbox[2], done, marker: done ? '✓' : '–', checkIndex: ++checkIndex };
       })
     };
   }
 
   return {
     ...stamp,
+    id: entry.id,
+    dateTime: entry.dateTime,
     title: lines[0] || '',
     tags: entry.tags,
-    items: lines.slice(1).map(text => ({ text, done: false, marker: '' }))
+    items: lines.slice(1).map(text => ({ text, done: false, marker: '', checkIndex: null }))
   };
 }
 
 function itemHtml(item) {
-  return `
-    <div class="item${item.done ? ' done' : ''}">
+  const body = `
       ${item.marker ? `<span class="marker">${item.marker}</span>` : ''}
-      <span class="text">${escapeHtml(item.text)}</span>
-    </div>`;
+      <span class="text">${escapeHtml(item.text)}</span>`;
+
+  if (item.checkIndex === null || item.checkIndex === undefined) {
+    return `<div class="item${item.done ? ' done' : ''}">${body}</div>`;
+  }
+
+  return `
+    <button type="button" class="item checkable${item.done ? ' done' : ''}"
+            data-item="${item.checkIndex}" aria-pressed="${item.done}">${body}
+    </button>`;
+}
+
+// Ticking an item rewrites notes.md, so the feed is reloaded rather than
+// patched in place — same reasoning as deleteNote.
+async function toggleItem(entry, checkIndex) {
+  const res = await api(
+    `/api/notes/${entry.id}/items/${checkIndex}?dateTime=${encodeURIComponent(entry.dateTime)}`,
+    { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: '{}' }
+  );
+  if (!res.ok) window.alert('Could not update that item — it may have already changed. Reloading.');
+  await loadToday();
+  await loadNotes();
+  if (selectedIndex !== null) showDetail(selectedIndex);
 }
 
 function renderFeed() {
@@ -245,6 +275,7 @@ async function loadNotes() {
 async function loadToday() {
   const res = await api('/api/todos/today');
   const { name, entry } = await res.json();
+  todayEntry = entry;
   todayListTitle = `List: ${name}`;
   todayDateEl.textContent = formatStamp(`${name.replace(/^Todo\s*/, '')} 00:00`).date;
 
@@ -288,7 +319,21 @@ board.addEventListener('click', e => {
   if (!card) return;
   const index = Number(card.dataset.index);
   if (e.target.closest('[data-delete]')) return deleteNote(index);
+  const item = e.target.closest('[data-item]');
+  if (item) return toggleItem(shapeEntry(entries[index]), Number(item.dataset.item));
   showDetail(index);
+});
+
+todayItemsEl.addEventListener('click', e => {
+  const item = e.target.closest('[data-item]');
+  if (item && todayEntry) toggleItem(shapeEntry(todayEntry), Number(item.dataset.item));
+});
+
+detailItems.addEventListener('click', e => {
+  const item = e.target.closest('[data-item]');
+  if (item && selectedIndex !== null) {
+    toggleItem(shapeEntry(entries[selectedIndex]), Number(item.dataset.item));
+  }
 });
 
 board.addEventListener('keydown', e => {

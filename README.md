@@ -43,7 +43,8 @@ carries both.
 `#goals` only counts as the first token of the message, like `#todo`, so a note
 that happens to mention `#goals` mid-sentence stays a note.
 
-The first line becomes the title; [chrono-node](https://github.com/wanasit/chrono)
+The first line becomes the title, or — when the tag sits alone on its line —
+the next non-empty, non-bulleted line, indented or not. [chrono-node](https://github.com/wanasit/chrono)
 reads a date phrase out of that line only (subtask lines are ignored, so
 "ask for 2 letters" is never mistaken for a time) and stores it as `deadline`,
 or `null` when there is no date. Lines starting with `-` or `*` become
@@ -136,6 +137,11 @@ Only listed numbers can sign in. A number that isn't listed gets the same
 allowed in. Requests are capped at 5 codes and 10 attempts per 15 minutes per
 IP, and a successful code sets exactly the same session cookie the password form
 does.
+
+Clicking a checklist item — in the Today column, on a list card, or in the
+detail view — crosses it out and flips its `- [ ]` to `- [x]` in `notes.md`, so
+the state is the file rather than anything in the browser. Items are addressed
+by their position among the entry's checkbox lines.
 
 Deleting a note (the `×` on a card, or **Delete** in the detail view) rewrites
 `notes.md` without that entry. There is no undo in the app — the safety net is

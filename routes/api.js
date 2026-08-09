@@ -45,6 +45,25 @@ router.delete('/notes/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// Ticking a checkbox off a list. `itemIndex` counts checkbox lines within the
+// entry, matching the order the dashboard renders them.
+router.patch('/notes/:id/items/:itemIndex', (req, res) => {
+  const id = Number(req.params.id);
+  const itemIndex = Number(req.params.itemIndex);
+  const { done } = req.body || {};
+  if (!Number.isInteger(id) || id < 0) return res.status(400).json({ error: 'invalid note id' });
+  if (!Number.isInteger(itemIndex) || itemIndex < 0) {
+    return res.status(400).json({ error: 'invalid item index' });
+  }
+  if (done !== undefined && typeof done !== 'boolean') {
+    return res.status(400).json({ error: 'done must be a boolean' });
+  }
+
+  const updated = notes.setItemDone(id, itemIndex, done, req.query.dateTime);
+  if (!updated) return res.status(404).json({ error: 'item not found' });
+  res.json({ ok: true });
+});
+
 router.get('/todos/today', (req, res) => {
   res.json({ name: notes.dailyTodoName(), entry: notes.dailyTodo() });
 });
