@@ -149,7 +149,9 @@ In production the server **refuses to start** without `TWILIO_AUTH_TOKEN`,
 `PUBLIC_URL`, and `DASHBOARD_PASSWORD`, and refuses to start if
 `SKIP_TWILIO_VALIDATION=true`.
 
-`/health` and `/login` are the only unauthenticated endpoints: `/webhook/sms`
+`/health`, `/login`, `/privacy` and `/terms` are the only unauthenticated
+endpoints — the last two are public because A2P 10DLC campaign registration
+requires reachable links to them. `/webhook/sms`
 requires a valid Twilio signature, and the dashboard plus `/api` require a
 session. Signing in at `/login` sets a signed, HTTP-only session cookie that
 lasts 30 days; changing `DASHBOARD_PASSWORD` invalidates every existing session.
