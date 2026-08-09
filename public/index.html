@@ -20,6 +20,11 @@
 
     <div class="layout" id="layout">
       <section class="feed" id="feed">
+        <div class="tabs" id="tabs">
+          <button type="button" class="tab active" data-view="notes">Notes</button>
+          <button type="button" class="tab" data-view="goals">Goals</button>
+        </div>
+
         <div class="search">
           <span class="search-glyph" aria-hidden="true">⌕</span>
           <input id="search" type="text" placeholder="Search by word, date, or theme..." autocomplete="off" />
@@ -32,6 +37,13 @@
         <div class="empty-state" id="emptyState" hidden>
           <p>Nothing here yet.</p>
           <p class="empty-sub">Text your loci number, or write one below.</p>
+        </div>
+
+        <div class="board" id="goalBoard" hidden></div>
+
+        <div class="empty-state" id="goalEmpty" hidden>
+          <p>No goals yet.</p>
+          <p class="empty-sub">Text <span>#goals</span> followed by what you want to achieve.</p>
         </div>
       </section>
 
@@ -58,7 +70,7 @@
   </div>
 
   <form class="composer" id="composer">
-    <input id="composerInput" type="text" placeholder="Write a note… #tag to file it, #todo for today's list" autocomplete="off" />
+    <input id="composerInput" type="text" placeholder="Write a note… #tag to file it, #todo for today's list, #goals for a goal" autocomplete="off" />
     <button type="submit">Save</button>
   </form>
 

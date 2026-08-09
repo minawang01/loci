@@ -7,6 +7,7 @@ browse, search, and add notes from a browser.
 - `server.js` — Express entrypoint
 - `lib/notes.js` — appends notes/lists to `$DATA_DIR/notes.md`
 - `lib/tags.js` — tag registry (`$DATA_DIR/tags.json`) with keyword auto-tagging
+- `lib/goals.js` — `#goals` parsing and the goal store (`$DATA_DIR/goals.json`)
 - `routes/webhook.js` — Twilio inbound webhook (`POST /webhook/sms`), signature-validated and rate-limited
 - `routes/api.js` — JSON API behind the auth gate
 - `public/` — dashboard and login page
@@ -28,10 +29,29 @@ Still outstanding: the WhatsApp sandbox webhook (Console-only, see below) and
 
 | You text | Result |
 | --- | --- |
+| `#goals finish the LSAT application by December 1` + optional `- subtask` lines | new goal with a parsed deadline and checklist, shown under the dashboard's Goals tab |
 | `#create list Groceries` + items on following lines | new checklist entry |
 | `#todo call the dentist` | appends a bullet to the list for that calendar day (`Todo YYYY-MM-DD`), creating it on the day's first item |
 | `avocados #grocery` | appends to the newest existing `grocery` list, otherwise saved as a tagged note |
 | `remember to call the dentist` | plain note, auto-tagged from the tag registry keywords |
+
+Rules are matched in that order, so `#goals` wins over `#todo` when a message
+carries both.
+
+### Goals
+
+`#goals` only counts as the first token of the message, like `#todo`, so a note
+that happens to mention `#goals` mid-sentence stays a note.
+
+The first line becomes the title; [chrono-node](https://github.com/wanasit/chrono)
+reads a date phrase out of that line only (subtask lines are ignored, so
+"ask for 2 letters" is never mistaken for a time) and stores it as `deadline`,
+or `null` when there is no date. Lines starting with `-` or `*` become
+independently checkable subtasks; other lines are kept in `description` but do
+not become structure. Goals live in `$DATA_DIR/goals.json` rather than
+`notes.md`, since they are edited in place — unlike notes, whose ids are file
+positions, each goal and subtask carries a generated id that survives the list
+changing around it.
 
 ## Local development
 
@@ -63,7 +83,7 @@ All of these are documented in `.env.example`.
 | `PUBLIC_URL` | **in production** | public origin, no trailing slash; must match the URL configured in Twilio, since Twilio signs that exact URL |
 | `PORT` | no | defaults to 3000 |
 | `NODE_ENV` | **in production** | set to `production` to enforce validation + auth |
-| `DATA_DIR` | no | where `notes.md`/`tags.json` live; defaults to `./data` |
+| `DATA_DIR` | no | where `notes.md`/`tags.json`/`goals.json` live; defaults to `./data` |
 | `DASHBOARD_USER` | no | login user, defaults to `loci` |
 | `DASHBOARD_PASSWORD` | **in production** | login password for the dashboard and `/api` |
 | `BACKUP_REMOTE` | no | rclone `remote:path` to mirror `DATA_DIR` into; backups are off when unset |
@@ -179,7 +199,7 @@ deploy needed. The volume is not touched by deploys, so notes persist.
 
 ## Persistence and backup
 
-`notes.md` and `tags.json` live in `DATA_DIR`, which is the Fly volume mounted at
+`notes.md`, `tags.json`, and `goals.json` live in `DATA_DIR`, the Fly volume mounted at
 `/data`. The volume survives `fly deploy` and machine restarts. A Fly volume is
 attached to a single machine, so keep this app at one machine
 (`min_machines_running = 1`, no scaling out).
