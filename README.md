@@ -40,6 +40,9 @@ carries both.
 
 ### Goals
 
+`#goals` only counts as the first token of the message, like `#todo`, so a note
+that happens to mention `#goals` mid-sentence stays a note.
+
 The first line becomes the title; [chrono-node](https://github.com/wanasit/chrono)
 reads a date phrase out of that line only (subtask lines are ignored, so
 "ask for 2 letters" is never mistaken for a time) and stores it as `deadline`,
