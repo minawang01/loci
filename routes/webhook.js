@@ -86,14 +86,16 @@ router.post('/sms', webhookLimiter, validateTwilioRequest, (req, res) => {
     return res.type('text/xml').send(twiml(`Created list "${listName}" with ${items.length} item(s).`));
   }
 
-  // 3. "#todo <item>" goes onto the list for the day it was sent
+  // 3. "#todo <item>" goes onto the list for the day it was sent. Each line is
+  // its own item, so a multi-line message becomes several tickable entries.
   if (/^#todo\b/i.test(body)) {
-    const item = body.replace(/^#todo\b/i, '').trim();
-    if (!item) {
+    const items = notes.todoItems(body.replace(/^#todo\b/i, ''));
+    if (!items.length) {
       return res.type('text/xml').send(twiml('Send "#todo" followed by what you need to do.'));
     }
-    notes.addToDailyTodo(item);
-    return res.type('text/xml').send(twiml(`Added "${item}" to today's todo list.`));
+    notes.addToDailyTodo(items);
+    const summary = items.length === 1 ? `"${items[0]}"` : `${items.length} items`;
+    return res.type('text/xml').send(twiml(`Added ${summary} to today's todo list.`));
   }
 
   // 4. "#done <what you finished>" ticks the closest item off today's list,

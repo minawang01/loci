@@ -29,9 +29,9 @@ router.post('/notes', (req, res) => {
   }
 
   if (/^#todo\b/i.test(trimmed)) {
-    const item = trimmed.replace(/^#todo\b/i, '').trim();
-    if (!item) return res.status(400).json({ error: 'todo item is required' });
-    notes.addToDailyTodo(item);
+    const items = notes.todoItems(trimmed.replace(/^#todo\b/i, ''));
+    if (!items.length) return res.status(400).json({ error: 'todo item is required' });
+    notes.addToDailyTodo(items);
     return res.status(201).json({ ok: true, list: notes.dailyTodoName() });
   }
 
