@@ -16,6 +16,7 @@ const {
 const otp = require('./lib/otp');
 const { DATA_DIR, ensureDataDir } = require('./lib/paths');
 const { startBackups } = require('./lib/backup');
+const { startPlanScheduler } = require('./lib/plan');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -45,6 +46,7 @@ function assertProductionConfig() {
 if (IS_PRODUCTION) assertProductionConfig();
 ensureDataDir();
 startBackups();
+startPlanScheduler();
 
 app.use(bodyParser.urlencoded({ extended: false })); // Twilio posts form-encoded
 app.use(bodyParser.json());
