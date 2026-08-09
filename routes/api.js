@@ -3,6 +3,8 @@ const notes = require('../lib/notes');
 const tags = require('../lib/tags');
 const goals = require('../lib/goals');
 const done = require('../lib/done');
+const plan = require('../lib/plan');
+const sms = require('../lib/sms');
 
 const router = express.Router();
 
@@ -117,6 +119,37 @@ router.patch('/goals/:id/subtasks/:subtaskId', (req, res) => {
   const goal = goals.setSubtaskDone(req.params.id, req.params.subtaskId, done);
   if (!goal) return res.status(404).json({ error: 'goal or subtask not found' });
   res.json(goal);
+});
+
+// -- Plan --
+// The same generation the nightly job runs, on demand. Texting it is opt-in per
+// request: the dashboard shows the plan on screen, which works even while
+// outbound SMS is carrier-blocked.
+router.post('/plan', async (req, res) => {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return res.status(503).json({ error: 'ANTHROPIC_API_KEY is not configured' });
+  }
+
+  let generated;
+  try {
+    generated = await plan.generatePlan();
+  } catch (err) {
+    console.error('Plan generation failed:', err.message);
+    return res.status(502).json({ error: 'Could not generate a plan. Try again shortly.' });
+  }
+
+  const body = { ...generated, sent: false };
+  if (req.body && req.body.send && sms.canSend(process.env.PLAN_PHONE_NUMBER)) {
+    try {
+      await sms.sendMessage(process.env.PLAN_PHONE_NUMBER, generated.message);
+      body.sent = true;
+    } catch (err) {
+      // The plan itself succeeded, so it is still returned — only delivery failed.
+      console.error('Plan send failed:', err.message);
+      body.sendError = err.message;
+    }
+  }
+  res.json(body);
 });
 
 // -- Tags --

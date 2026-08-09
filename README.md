@@ -8,6 +8,8 @@ browse, search, and add notes from a browser.
 - `lib/notes.js` — appends notes/lists to `$DATA_DIR/notes.md`
 - `lib/tags.js` — tag registry (`$DATA_DIR/tags.json`) with keyword auto-tagging
 - `lib/goals.js` — `#goals` parsing and the goal store (`$DATA_DIR/goals.json`)
+- `lib/plan.js` — nightly plan generation (Claude) and its scheduler
+- `lib/sms.js` — outbound SMS/WhatsApp sending
 - `routes/webhook.js` — Twilio inbound webhook (`POST /webhook/sms`), signature-validated and rate-limited
 - `routes/api.js` — JSON API behind the auth gate
 - `public/` — dashboard and login page
@@ -70,6 +72,48 @@ not become structure. Goals live in `$DATA_DIR/goals.json` rather than
 positions, each goal and subtask carries a generated id that survives the list
 changing around it.
 
+## Nightly plan
+
+Each night the app asks Claude for a short plan for the next day and texts it
+over. It reads active goals (with deadlines, days remaining, and each subtask's
+state), the free window (`7am–11pm` by default — there is no busy-block source
+to subtract from it yet), and the todo items crossed off over the last three
+days as loose momentum context. One API call, no SDK.
+
+The prompt asks for at most 4 tasks and usually 2-3, and leaves the count to the
+model's read of the work: several quick, bounded tasks can share a day, while an
+open-ended one absorbs it. It also asks the model to reuse an existing unfinished
+subtask rather than invent a task, to weight nearer deadlines while still rotating
+undated goals in, and to answer as JSON. The reply is parsed, hard-capped at 4,
+and formatted one line per task:
+
+```
+Plan for 2026-08-10:
+• draft personal statement (finish LSAT application)
+• ask Priya for a referral (ask Priya for a referral)
+```
+
+The job is off unless `ANTHROPIC_API_KEY` and `PLAN_PHONE_NUMBER` are both set,
+like backups and phone sign-in. It runs at `PLAN_SEND_TIME` (default `21:30`)
+in the **host's** local time, which on Fly is UTC unless you set `TZ`. No plan
+is persisted — there is no plan history and no feedback loop yet.
+
+The dashboard's **Plan tomorrow** button, under the Today column, runs the same
+generation on demand and shows the result on the page rather than texting it —
+which is the only way to read a plan while outbound SMS is carrier-blocked.
+It calls `POST /api/plan`, which texts the plan too when passed `{"send": true}`
+and a `PLAN_PHONE_NUMBER` is configured. A send failure does not lose the plan:
+the response still carries it, with `sendError` alongside.
+
+To send one from the shell instead:
+
+```bash
+npm run plan
+```
+
+A failure — bad key, unparseable reply, Twilio rejection — is logged and
+swallowed, so a bad night never takes the server down with it.
+
 ## Local development
 
 ```bash
@@ -108,6 +152,12 @@ All of these are documented in `.env.example`.
 | `RCLONE_CONFIG_DRIVE_*` | for backups | rclone remote config, including the OAuth token |
 | `TWILIO_VERIFY_SERVICE_SID` | for phone sign-in | Verify service that sends the login code |
 | `LOGIN_PHONE_NUMBERS` | for phone sign-in | comma-separated E.164 numbers allowed to sign in |
+| `ANTHROPIC_API_KEY` | for the nightly plan | Claude API key |
+| `PLAN_PHONE_NUMBER` | for the nightly plan | where the plan is texted; prefix `whatsapp:` to send over WhatsApp |
+| `PLAN_SEND_TIME` | no | 24h host-local time, defaults to `21:30` |
+| `CLAUDE_MODEL` | no | defaults to `claude-sonnet-4-6` |
+| `PLAN_DAY_START` / `PLAN_DAY_END` | no | the free window, defaults `7am`/`11pm` |
+| `TZ` | no | host timezone; set it so `PLAN_SEND_TIME` and daily todo lists roll over at your midnight, not UTC's |
 | `WEBHOOK_RATE_LIMIT` | no | inbound requests per minute per IP, defaults to 30 |
 | `SKIP_TWILIO_VALIDATION` | no | local-only escape hatch; rejected at startup in production |
 
@@ -115,7 +165,9 @@ In production the server **refuses to start** without `TWILIO_AUTH_TOKEN`,
 `PUBLIC_URL`, and `DASHBOARD_PASSWORD`, and refuses to start if
 `SKIP_TWILIO_VALIDATION=true`.
 
-`/health` and `/login` are the only unauthenticated endpoints: `/webhook/sms`
+`/health`, `/login`, `/privacy` and `/terms` are the only unauthenticated
+endpoints — the last two are public because A2P 10DLC campaign registration
+requires reachable links to them. `/webhook/sms`
 requires a valid Twilio signature, and the dashboard plus `/api` require a
 session. Signing in at `/login` sets a signed, HTTP-only session cookie that
 lasts 30 days; changing `DASHBOARD_PASSWORD` invalidates every existing session.

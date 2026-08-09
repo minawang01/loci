@@ -16,6 +16,7 @@ const {
 const otp = require('./lib/otp');
 const { DATA_DIR, ensureDataDir } = require('./lib/paths');
 const { startBackups } = require('./lib/backup');
+const { startPlanScheduler } = require('./lib/plan');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -45,6 +46,7 @@ function assertProductionConfig() {
 if (IS_PRODUCTION) assertProductionConfig();
 ensureDataDir();
 startBackups();
+startPlanScheduler();
 
 app.use(bodyParser.urlencoded({ extended: false })); // Twilio posts form-encoded
 app.use(bodyParser.json());
@@ -55,8 +57,17 @@ app.get('/health', (req, res) => res.json({ ok: true }));
 // front of the basic-auth gate that protects everything else.
 app.use('/webhook', webhookRoutes);
 
-// The login page is the only thing served before the gate, so an unauthenticated
-// visitor never sees any part of the dashboard.
+// A2P 10DLC campaign registration requires a publicly reachable privacy policy
+// and terms, so these two sit outside the auth gate. They describe the app, not
+// its contents, and expose nothing about the notes.
+for (const page of ['privacy', 'terms']) {
+  app.get(`/${page}`, (req, res) =>
+    res.sendFile(path.join(__dirname, 'public', `${page}.html`))
+  );
+}
+
+// The login page is the only other thing served before the gate, so an
+// unauthenticated visitor never sees any part of the dashboard.
 app.get('/login', (req, res) => {
   if (isAuthenticated(req)) return res.redirect('/');
   res.sendFile(path.join(__dirname, 'public', 'login.html'));

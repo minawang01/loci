@@ -18,6 +18,8 @@ const detailDelete = document.getElementById('detailDelete');
 const logoutButton = document.getElementById('logout');
 const searchInput = document.getElementById('search');
 const tagFilterEl = document.getElementById('tagFilter');
+const planButton = document.getElementById('planButton');
+const planResult = document.getElementById('planResult');
 const composer = document.getElementById('composer');
 const composerInput = document.getElementById('composerInput');
 
@@ -295,6 +297,46 @@ async function loadTags() {
     .join('');
 }
 
+function planTaskHtml(task) {
+  const goal = task.goal_title
+    ? `<span class="plan-goal">${escapeHtml(task.goal_title)}</span>`
+    : '';
+  return `<div class="plan-task${task.estimated_size === 'substantial' ? ' big' : ''}">
+    <span class="text">${escapeHtml(task.task)}</span>${goal}
+  </div>`;
+}
+
+// Generation takes a few seconds, so the button carries its own progress and
+// error state rather than leaving the column looking inert.
+async function generatePlan() {
+  planButton.disabled = true;
+  planButton.textContent = 'Thinking…';
+  planResult.hidden = false;
+  planResult.innerHTML = '';
+
+  try {
+    const res = await api('/api/plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      planResult.innerHTML = `<p class="plan-error">${escapeHtml(data.error || 'Could not generate a plan.')}</p>`;
+      return;
+    }
+    planResult.innerHTML = data.suggestions.length
+      ? data.suggestions.map(planTaskHtml).join('')
+      : '<p class="plan-error">Nothing to suggest — add a goal first.</p>';
+  } catch (err) {
+    planResult.innerHTML = '<p class="plan-error">Could not reach the server.</p>';
+  } finally {
+    planButton.disabled = false;
+    planButton.textContent = 'Plan tomorrow';
+  }
+}
+
 // Deleting rewrites notes.md, which renumbers every entry after it, so the
 // feed is always reloaded rather than patched in place.
 async function deleteNote(index) {
@@ -383,6 +425,8 @@ backButton.addEventListener('click', () => {
 detailDelete.addEventListener('click', () => {
   if (selectedIndex !== null) deleteNote(selectedIndex);
 });
+
+planButton.addEventListener('click', generatePlan);
 
 logoutButton.addEventListener('click', async () => {
   await fetch('/logout', { method: 'POST' });
