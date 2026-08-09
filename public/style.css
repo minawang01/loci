@@ -119,6 +119,63 @@ body {
 }
 .today-empty span { font-style: normal; }
 
+/* -- plan -- */
+
+.plan {
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.plan-button {
+  font-family: var(--serif);
+  font-size: 12.5px;
+  width: 100%;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.plan-button:hover:not(:disabled) { border-color: var(--ink); color: var(--ink); }
+.plan-button:disabled { cursor: default; font-style: italic; }
+
+.plan-result[hidden] { display: none; }
+
+.plan-result {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.plan-task {
+  font-size: 14px;
+  line-height: 1.45;
+  padding-left: 10px;
+  border-left: 2px solid var(--border);
+}
+/* An open-ended task is meant to absorb the day, so it reads heavier than the
+   quick wins beside it. */
+.plan-task.big { border-left-color: var(--ink); }
+
+.plan-goal {
+  display: block;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.plan-error {
+  font-size: 13px;
+  font-style: italic;
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
 /* -- tabs -- */
 
 .tabs {
