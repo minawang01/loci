@@ -79,10 +79,17 @@ Plan for 2026-08-10:
 
 The job is off unless `ANTHROPIC_API_KEY` and `PLAN_PHONE_NUMBER` are both set,
 like backups and phone sign-in. It runs at `PLAN_SEND_TIME` (default `21:30`)
-in the **host's** local time, which on Fly is UTC unless you set `TZ`. Nothing
-is persisted — v0 is SMS only, with no plan history and no feedback loop.
+in the **host's** local time, which on Fly is UTC unless you set `TZ`. No plan
+is persisted — there is no plan history and no feedback loop yet.
 
-Send one immediately, without waiting for the schedule:
+The dashboard's **Plan tomorrow** button, under the Today column, runs the same
+generation on demand and shows the result on the page rather than texting it —
+which is the only way to read a plan while outbound SMS is carrier-blocked.
+It calls `POST /api/plan`, which texts the plan too when passed `{"send": true}`
+and a `PLAN_PHONE_NUMBER` is configured. A send failure does not lose the plan:
+the response still carries it, with `sendError` alongside.
+
+To send one from the shell instead:
 
 ```bash
 npm run plan
