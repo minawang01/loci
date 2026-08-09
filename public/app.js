@@ -74,8 +74,9 @@ function shapeEntry(entry) {
   const isList = /^list:/i.test(entry.title);
 
   if (isList) {
-    // checkIndex counts checkbox lines only, matching how the server addresses
-    // them; a stray non-checkbox line is rendered but not toggleable.
+    // Every line of a list is an item, whether or not it carries a checkbox —
+    // older multi-line "#todo" messages landed as bare lines. checkIndex counts
+    // them the same way the server does, so both agree on which one was ticked.
     let checkIndex = -1;
     return {
       ...stamp,
@@ -86,7 +87,7 @@ function shapeEntry(entry) {
       items: lines.map(line => {
         const checkbox = /^[-*]\s*\[([ xX])\]\s*(.*)$/.exec(line);
         if (!checkbox) {
-          return { text: line.replace(/^[-*]\s*/, ''), done: false, marker: '–', checkIndex: null };
+          return { text: line.replace(/^[-*]\s*/, ''), done: false, marker: '–', checkIndex: ++checkIndex };
         }
         const done = checkbox[1].toLowerCase() === 'x';
         return { text: checkbox[2], done, marker: done ? '✓' : '–', checkIndex: ++checkIndex };
