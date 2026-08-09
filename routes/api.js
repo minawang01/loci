@@ -1,6 +1,7 @@
 const express = require('express');
 const notes = require('../lib/notes');
 const tags = require('../lib/tags');
+const goals = require('../lib/goals');
 
 const router = express.Router();
 
@@ -17,8 +18,13 @@ router.post('/notes', (req, res) => {
   const { text, tags: manualTags = [] } = req.body;
   if (!text || !text.trim()) return res.status(400).json({ error: 'text is required' });
 
-  // Same "#todo" rule the SMS webhook applies, so both entry points agree.
+  // Same tag rules the SMS webhook applies, in the same order, so both entry
+  // points agree on what a message means.
   const trimmed = text.trim();
+  if (goals.isGoalText(trimmed)) {
+    return res.status(201).json({ ok: true, goal: goals.createGoal(trimmed) });
+  }
+
   if (/^#todo\b/i.test(trimmed)) {
     const item = trimmed.replace(/^#todo\b/i, '').trim();
     if (!item) return res.status(400).json({ error: 'todo item is required' });
@@ -56,6 +62,35 @@ router.post('/lists/:tag/items', (req, res) => {
   const added = notes.addItemToList(req.params.tag, item);
   if (!added) return res.status(404).json({ error: `no existing list found for "${req.params.tag}"` });
   res.status(201).json({ ok: true });
+});
+
+// -- Goals --
+router.get('/goals', (req, res) => res.json(goals.loadGoals()));
+
+router.post('/goals', (req, res) => {
+  const { text } = req.body;
+  if (!text || !text.trim()) return res.status(400).json({ error: 'text is required' });
+  res.status(201).json(goals.createGoal(text.trim()));
+});
+
+router.patch('/goals/:id', (req, res) => {
+  const { status } = req.body || {};
+  if (status && status !== 'active' && status !== 'done') {
+    return res.status(400).json({ error: 'status must be "active" or "done"' });
+  }
+  const goal = goals.setStatus(req.params.id, status);
+  if (!goal) return res.status(404).json({ error: 'goal not found' });
+  res.json(goal);
+});
+
+router.patch('/goals/:id/subtasks/:subtaskId', (req, res) => {
+  const { done } = req.body || {};
+  if (done !== undefined && typeof done !== 'boolean') {
+    return res.status(400).json({ error: 'done must be a boolean' });
+  }
+  const goal = goals.setSubtaskDone(req.params.id, req.params.subtaskId, done);
+  if (!goal) return res.status(404).json({ error: 'goal or subtask not found' });
+  res.json(goal);
 });
 
 // -- Tags --

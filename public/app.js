@@ -1,5 +1,9 @@
 const board = document.getElementById('board');
 const emptyState = document.getElementById('emptyState');
+const goalBoard = document.getElementById('goalBoard');
+const goalEmpty = document.getElementById('goalEmpty');
+const tabsEl = document.getElementById('tabs');
+const searchEl = document.querySelector('.search');
 const layout = document.getElementById('layout');
 const todayDateEl = document.getElementById('todayDate');
 const todayItemsEl = document.getElementById('todayItems');
@@ -21,7 +25,9 @@ const PREVIEW_ITEMS = 4;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 let activeTag = null;
+let activeView = 'notes';
 let entries = [];
+let goals = [];
 let selectedIndex = null;
 let todayListTitle = null;
 
@@ -123,6 +129,85 @@ function renderFeed() {
   });
 }
 
+// "2026-12-01T12:00:00.000Z" -> "Dec 1", plus a rough sense of urgency.
+function formatDeadline(iso) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const label = `${MONTHS[date.getMonth()]} ${date.getDate()}`;
+  const days = Math.round((date - new Date()) / 86400000);
+  if (days < 0) return `${label} · overdue`;
+  if (days === 0) return `${label} · today`;
+  if (days === 1) return `${label} · tomorrow`;
+  return `${label} · in ${days} days`;
+}
+
+function goalSubtaskHtml(goal) {
+  return goal.subtasks
+    .map(
+      subtask => `
+    <button type="button" class="item goal-subtask${subtask.done ? ' done' : ''}"
+            data-subtask="${escapeHtml(subtask.id)}"
+            aria-pressed="${subtask.done}">
+      <span class="marker">${subtask.done ? '✓' : '–'}</span>
+      <span class="text">${escapeHtml(subtask.text)}</span>
+    </button>`
+    )
+    .join('');
+}
+
+function renderGoals() {
+  goalBoard.innerHTML = '';
+  goalEmpty.hidden = goals.length > 0;
+
+  // Active goals first; within each group, newest first.
+  const ordered = [...goals].sort((a, b) => {
+    if (a.status !== b.status) return a.status === 'done' ? 1 : -1;
+    return String(b.created_at).localeCompare(String(a.created_at));
+  });
+
+  ordered.forEach(goal => {
+    const created = new Date(goal.created_at);
+    const createdLabel = Number.isNaN(created.getTime())
+      ? ''
+      : `${MONTHS[created.getMonth()]} ${created.getDate()}`;
+    const card = document.createElement('div');
+    card.className = `card goal${goal.status === 'done' ? ' goal-done' : ''}`;
+    card.dataset.goal = goal.id;
+    card.innerHTML = `
+      <div class="card-meta">
+        <span class="card-date">${escapeHtml(createdLabel)}</span>
+        ${goal.deadline ? `<span class="card-tag">${escapeHtml(formatDeadline(goal.deadline))}</span>` : ''}
+      </div>
+      <div class="card-title">${escapeHtml(goal.title || 'Untitled goal')}</div>
+      <div class="card-items">${goalSubtaskHtml(goal)}</div>
+      <button type="button" class="goal-status" data-status>
+        ${goal.status === 'done' ? 'Mark active' : 'Mark complete'}
+      </button>
+    `;
+    goalBoard.appendChild(card);
+  });
+}
+
+async function loadGoals() {
+  const res = await api('/api/goals');
+  goals = await res.json();
+  renderGoals();
+}
+
+function showView(view) {
+  activeView = view;
+  const notesView = view === 'notes';
+  searchEl.hidden = !notesView;
+  tagFilterEl.hidden = !notesView;
+  board.hidden = !notesView;
+  emptyState.hidden = !notesView || entries.length > 0;
+  goalBoard.hidden = notesView;
+  goalEmpty.hidden = notesView || goals.length > 0;
+  tabsEl.querySelectorAll('.tab').forEach(tab => {
+    tab.classList.toggle('active', tab.dataset.view === view);
+  });
+}
+
 function showDetail(index) {
   const entry = shapeEntry(entries[index]);
   selectedIndex = index;
@@ -154,6 +239,7 @@ async function loadNotes() {
   const filtering = params.has('q') || params.has('tag');
   entries = filtering ? all : all.filter(entry => entry.title !== todayListTitle);
   renderFeed();
+  showView(activeView);
 }
 
 async function loadToday() {
@@ -212,7 +298,42 @@ board.addEventListener('keydown', e => {
   showDetail(Number(card.dataset.index));
 });
 
-backButton.addEventListener('click', showFeed);
+tabsEl.addEventListener('click', e => {
+  const tab = e.target.closest('.tab');
+  if (!tab) return;
+  showFeed();
+  showView(tab.dataset.view);
+});
+
+goalBoard.addEventListener('click', async e => {
+  const card = e.target.closest('.goal');
+  if (!card) return;
+  const id = card.dataset.goal;
+  const subtask = e.target.closest('[data-subtask]');
+
+  if (subtask) {
+    await api(`/api/goals/${encodeURIComponent(id)}/subtasks/${encodeURIComponent(subtask.dataset.subtask)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}'
+    });
+    return loadGoals();
+  }
+
+  if (e.target.closest('[data-status]')) {
+    await api(`/api/goals/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}'
+    });
+    return loadGoals();
+  }
+});
+
+backButton.addEventListener('click', () => {
+  showFeed();
+  showView(activeView);
+});
 
 detailDelete.addEventListener('click', () => {
   if (selectedIndex !== null) deleteNote(selectedIndex);
@@ -255,14 +376,16 @@ composer.addEventListener('submit', async e => {
   showFeed();
   await loadTags();
   await loadToday();
+  await loadGoals();
   await loadNotes();
 });
 
 loadTags();
+loadGoals();
 loadToday().then(loadNotes);
 
 // Pick up notes texted in from your phone, but never yank the feed out from
 // under someone who is reading a single entry.
 setInterval(() => {
-  if (selectedIndex === null) loadToday().then(loadNotes);
+  if (selectedIndex === null) loadToday().then(loadGoals).then(loadNotes);
 }, 15000);

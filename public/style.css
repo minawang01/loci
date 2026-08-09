@@ -119,7 +119,72 @@ body {
 }
 .today-empty span { font-style: normal; }
 
+/* -- tabs -- */
+
+.tabs {
+  display: flex;
+  gap: 22px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
+}
+
+.tab {
+  font-family: var(--serif);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid transparent;
+  margin-bottom: -1px;
+  padding: 0 0 10px;
+  cursor: pointer;
+}
+.tab:hover { color: var(--ink); }
+.tab.active {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+}
+
+/* -- goals -- */
+
+.goal { cursor: default; }
+.goal:hover { border-color: var(--border); }
+.goal-done .card-title {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.goal-subtask {
+  align-items: baseline;
+  width: 100%;
+  text-align: left;
+  font-family: var(--serif);
+  color: var(--ink);
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+.goal-subtask:hover .text { color: var(--muted); }
+
+.goal-status {
+  font-family: var(--serif);
+  font-size: 12px;
+  margin-top: 16px;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.goal-status:hover { border-color: var(--ink); color: var(--ink); }
+
 /* -- search -- */
+
+.search[hidden] { display: none; }
 
 .search {
   display: flex;
@@ -151,6 +216,8 @@ body {
 
 /* -- tag pills -- */
 
+.tag-filter[hidden] { display: none; }
+
 .tag-filter {
   display: flex;
   flex-wrap: wrap;
@@ -180,6 +247,8 @@ body {
 .tag-chip .count { margin-left: 6px; }
 
 /* -- feed -- */
+
+.board[hidden] { display: none; }
 
 .board {
   column-count: 2;

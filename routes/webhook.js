@@ -3,6 +3,7 @@ const rateLimit = require('express-rate-limit');
 const twilio = require('twilio');
 const notes = require('../lib/notes');
 const tags = require('../lib/tags');
+const goals = require('../lib/goals');
 
 const router = express.Router();
 
@@ -57,7 +58,19 @@ router.post('/sms', webhookLimiter, validateTwilioRequest, (req, res) => {
 
   const lower = body.toLowerCase();
 
-  // 1. New list: "#create list" followed by items on their own lines
+  // 1. "#goals <title>" with optional "- subtask" lines. Checked before the
+  // list and todo rules so a message carrying several tags becomes a goal.
+  if (goals.isGoalText(body)) {
+    const goal = goals.createGoal(body);
+    if (!goal.title && !goal.subtasks.length) {
+      return res.type('text/xml').send(twiml('Saved an untitled goal — send "#goals" followed by what you want to achieve.'));
+    }
+    const deadline = goal.deadline ? `, due ${goal.deadline.slice(0, 10)}` : '';
+    const subtasks = goal.subtasks.length ? ` with ${goal.subtasks.length} subtask(s)` : '';
+    return res.type('text/xml').send(twiml(`Goal saved: "${goal.title}"${deadline}${subtasks}.`));
+  }
+
+  // 2. New list: "#create list" followed by items on their own lines
   if (lower.startsWith('#create list')) {
     const lines = body.split('\n').map(l => l.trim()).filter(Boolean);
     const [, ...rest] = lines; // drop the "#create list" line
@@ -72,7 +85,7 @@ router.post('/sms', webhookLimiter, validateTwilioRequest, (req, res) => {
     return res.type('text/xml').send(twiml(`Created list "${listName}" with ${items.length} item(s).`));
   }
 
-  // 2. "#todo <item>" goes onto the list for the day it was sent
+  // 3. "#todo <item>" goes onto the list for the day it was sent
   if (/^#todo\b/i.test(body)) {
     const item = body.replace(/^#todo\b/i, '').trim();
     if (!item) {
@@ -82,9 +95,9 @@ router.post('/sms', webhookLimiter, validateTwilioRequest, (req, res) => {
     return res.type('text/xml').send(twiml(`Added "${item}" to today's todo list.`));
   }
 
-  // 3. Add item to an existing list via trailing hashtag, e.g. "avocados #grocery"
+  // 4. Add item to an existing list via trailing hashtag, e.g. "avocados #grocery"
   // Only routes here if that list already exists — otherwise falls through to
-  // rule 4 below and gets saved as a regular tagged note.
+  // rule 5 below and gets saved as a regular tagged note.
   const trailingTagMatch = body.match(/#(\w+)\s*$/);
   if (trailingTagMatch) {
     const tagName = trailingTagMatch[1];
@@ -94,7 +107,7 @@ router.post('/sms', webhookLimiter, validateTwilioRequest, (req, res) => {
     }
   }
 
-  // 4. Plain note
+  // 5. Plain note
   const detectedTags = tags.detectTags(body);
   notes.appendNote(body, detectedTags);
   return res.type('text/xml').send(
