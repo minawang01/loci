@@ -339,6 +339,21 @@ body {
   text-decoration: line-through;
   color: var(--muted);
 }
+/* Checklist rows are buttons so they can be ticked off, but should read as
+   plain text until hovered. */
+.item.checkable {
+  align-items: baseline;
+  width: 100%;
+  text-align: left;
+  font-family: var(--serif);
+  font-size: 14.5px;
+  color: var(--ink);
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+.item.checkable:hover .text { color: var(--muted); }
 
 .more {
   font-size: 12.5px;
