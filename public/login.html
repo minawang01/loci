@@ -108,6 +108,30 @@
     margin: 16px 0 0;
     min-height: 18px;
   }
+
+  .switch {
+    width: auto;
+    display: block;
+    margin: 18px auto 0;
+    padding: 0;
+    font-size: 13px;
+    font-style: italic;
+    color: var(--muted);
+    background: none;
+    border: none;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .switch:hover { color: var(--ink); opacity: 1; }
+
+  .sent {
+    font-size: 13px;
+    font-style: italic;
+    color: var(--muted);
+    margin: 0 0 20px;
+  }
+
+  [hidden] { display: none !important; }
 </style>
 </head>
 <body>
@@ -117,42 +141,137 @@
     <div class="wordmark">loci</div>
     <p class="tagline">Everything you texted yourself.</p>
 
-    <form id="loginForm">
+    <form id="loginForm" hidden>
       <label for="username">Username</label>
-      <input id="username" name="username" type="text" autocomplete="username" autofocus required />
+      <input id="username" name="username" type="text" autocomplete="username" required />
 
       <label for="password">Password</label>
       <input id="password" name="password" type="password" autocomplete="current-password" required />
 
       <button type="submit">Enter</button>
-      <p class="error" id="error" role="alert"></p>
+      <button type="button" class="switch" id="usePhone" hidden>Text me a code instead</button>
     </form>
+
+    <form id="phoneForm" hidden>
+      <div id="phoneStep">
+        <label for="phone">Phone number</label>
+        <input id="phone" name="phone" type="tel" autocomplete="tel" placeholder="(555) 123-4567" required />
+        <button type="submit" id="phoneSubmit">Text me a code</button>
+      </div>
+
+      <div id="codeStep" hidden>
+        <p class="sent" id="sentTo"></p>
+        <label for="code">Six-digit code</label>
+        <input id="code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code"
+               maxlength="6" pattern="[0-9]*" />
+        <button type="button" id="codeSubmit">Enter</button>
+      </div>
+
+      <button type="button" class="switch" id="usePassword">Use a password instead</button>
+    </form>
+
+    <p class="error" id="error" role="alert"></p>
   </main>
 
   <script>
-    const form = document.getElementById('loginForm');
+    const passwordForm = document.getElementById('loginForm');
+    const phoneForm = document.getElementById('phoneForm');
+    const phoneStep = document.getElementById('phoneStep');
+    const codeStep = document.getElementById('codeStep');
+    const phoneInput = document.getElementById('phone');
+    const codeInput = document.getElementById('code');
+    const codeSubmit = document.getElementById('codeSubmit');
+    const sentTo = document.getElementById('sentTo');
     const error = document.getElementById('error');
 
-    form.addEventListener('submit', async event => {
-      event.preventDefault();
-      error.textContent = '';
-      const res = await fetch('/login', {
+    function post(url, payload) {
+      return fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: document.getElementById('username').value,
-          password: document.getElementById('password').value
-        })
+        body: JSON.stringify(payload)
+      });
+    }
+
+    function show(which) {
+      error.textContent = '';
+      const phone = which === 'phone';
+      phoneForm.hidden = !phone;
+      passwordForm.hidden = phone;
+      (phone ? phoneInput : document.getElementById('username')).focus();
+    }
+
+    // Phone sign-in only exists where Twilio Verify is configured; without it the
+    // page stays exactly as it was.
+    fetch('/login/options')
+      .then(res => res.json())
+      .then(options => {
+        document.getElementById('usePhone').hidden = !options.otp;
+        show(options.otp ? 'phone' : 'password');
+      })
+      .catch(() => show('password'));
+
+    document.getElementById('usePhone').addEventListener('click', () => show('phone'));
+    document.getElementById('usePassword').addEventListener('click', () => show('password'));
+
+    passwordForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      error.textContent = '';
+      const res = await post('/login', {
+        username: document.getElementById('username').value,
+        password: document.getElementById('password').value
       });
 
-      if (res.ok) {
-        window.location.replace('/');
-        return;
-      }
+      if (res.ok) return window.location.replace('/');
 
       const body = await res.json().catch(() => ({}));
       error.textContent = body.error || 'Could not sign you in.';
       document.getElementById('password').value = '';
+    });
+
+    phoneForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      error.textContent = '';
+      const button = document.getElementById('phoneSubmit');
+      button.disabled = true;
+      const res = await post('/login/otp/start', { phone: phoneInput.value });
+      button.disabled = false;
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        error.textContent = body.error || 'Could not send a code.';
+        return;
+      }
+
+      // The server answers the same way for numbers it does not recognise, so
+      // the copy here can't promise the text actually went out.
+      sentTo.textContent = `If ${phoneInput.value} can sign in, a code is on its way.`;
+      phoneStep.hidden = true;
+      codeStep.hidden = false;
+      codeInput.focus();
+    });
+
+    codeSubmit.addEventListener('click', async () => {
+      error.textContent = '';
+      codeSubmit.disabled = true;
+      const res = await post('/login/otp/check', {
+        phone: phoneInput.value,
+        code: codeInput.value
+      });
+      codeSubmit.disabled = false;
+
+      if (res.ok) return window.location.replace('/');
+
+      const body = await res.json().catch(() => ({}));
+      error.textContent = body.error || 'Could not sign you in.';
+      codeInput.value = '';
+      codeInput.focus();
+    });
+
+    codeInput.addEventListener('keydown', event => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        codeSubmit.click();
+      }
     });
   </script>
 </body>
