@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Privacy Policy — loci</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,300;0,400;0,500;1,400;1,500&display=swap" rel="stylesheet">
+<!-- Styles are inlined for the same reason as the login page: /style.css sits
+     behind the auth gate, and these pages are public. -->
+<style>
+  :root {
+    --bg: #FAF9F9;
+    --ink: oklch(0.08 0 0);
+    --border: oklch(0.85 0 0);
+    --muted: oklch(0.4 0 0);
+    --serif: "Newsreader", Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 48px 24px 96px;
+    background: var(--bg);
+    font-family: var(--serif);
+    color: var(--ink);
+    line-height: 1.6;
+  }
+  .texture {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.35;
+    background-image: repeating-linear-gradient(45deg, transparent 0 6px, oklch(0.9 0 0 / 0.35) 6px 7px);
+  }
+  main { position: relative; max-width: 640px; margin: 0 auto; }
+  h1 { font-weight: 400; font-size: 2rem; margin: 0 0 4px; }
+  h2 { font-weight: 500; font-size: 1.125rem; margin: 32px 0 8px; }
+  .meta { color: var(--muted); font-size: 0.875rem; margin: 0 0 32px; }
+  ul { padding-left: 20px; }
+  li { margin-bottom: 6px; }
+  a { color: inherit; }
+  footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 0.875rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="texture"></div>
+<main>
+  <h1>Privacy Policy</h1>
+  <p class="meta">loci — a personal note-taking app. Last updated 9 August 2026.</p>
+
+  <p>loci is a single-user application run by one individual for their own use.
+  It is not a product offered to the public, and it has no other users.</p>
+
+  <h2>What is collected</h2>
+  <ul>
+    <li>The content of text messages the operator sends to the app's own phone number, and notes typed into its dashboard.</li>
+    <li>The phone number those messages are sent from, and the date and time they arrive.</li>
+    <li>Nothing else. There is no analytics, no tracking, no advertising identifier, and no third-party script on any page.</li>
+  </ul>
+
+  <h2>How it is used</h2>
+  <p>Message content is saved as notes so the operator can read it back later. It
+  is used for nothing else. It is not profiled, sold, rented, or shared with any
+  third party for any purpose, and it is never used for marketing.</p>
+
+  <h2>Where it is stored</h2>
+  <ul>
+    <li>On an encrypted disk attached to the operator's own server at <a href="https://fly.io">Fly.io</a>.</li>
+    <li>Mirrored to the operator's own private Google Drive folder as a backup.</li>
+    <li>Message metadata is retained by <a href="https://www.twilio.com/legal/privacy">Twilio</a>, which carries the messages, under Twilio's own privacy policy.</li>
+    <li>Note text is sent to <a href="https://www.anthropic.com/legal/privacy">Anthropic</a>'s API to generate a daily plan. Anthropic does not train its models on API inputs.</li>
+  </ul>
+  <p>Access requires a password or a one-time code sent to an allowlisted phone
+  number. No one but the operator can read the notes.</p>
+
+  <h2>How long it is kept</h2>
+  <p>Notes are kept until the operator deletes them. Deleting a note removes it
+  from the app; backup copies age out with the backup history.</p>
+
+  <h2>Messaging consent</h2>
+  <p>The only person who receives messages from this app is its operator, who set
+  it up for themselves. Consent is not collected from anyone else because no one
+  else is messaged. Reply <strong>STOP</strong> to any message to stop receiving
+  them, or <strong>HELP</strong> for help. Message and data rates may apply.
+  Mobile information is never shared with third parties for marketing purposes.</p>
+
+  <h2>Contact</h2>
+  <p>Questions about this policy go to the operator of this deployment, at the
+  email address on file with the app's Twilio account.</p>
+
+  <footer><a href="/terms">Terms &amp; Conditions</a></footer>
+</main>
+</body>
+</html>
