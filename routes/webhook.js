@@ -72,15 +72,16 @@ router.post('/sms', webhookLimiter, validateTwilioRequest, (req, res) => {
     return res.type('text/xml').send(twiml(`Goal saved: "${goal.title}"${deadline}${subtasks}.`));
   }
 
-  // 2. "#busy 9am-5pm work" marks time as unavailable on the day it names,
-  // defaulting to today. Checked before the list and todo rules for the same
-  // reason #goals is: a message carrying several tags resolves to the
-  // structured one rather than becoming a list item.
+  // 2. "#busy 9am-5pm work" — or a start plus a length, "#busy 3pm for 2 hrs"
+  // — marks time as unavailable on the day it names, defaulting to today.
+  // Checked before the list and todo rules for the same reason #goals is: a
+  // message carrying several tags resolves to the structured one rather than
+  // becoming a list item.
   if (busy.isBusyText(body)) {
     const block = busy.addBlock(body);
     if (!block) {
       return res.type('text/xml').send(
-        twiml('Send "#busy" with a time range, like "#busy 9am-5pm work".')
+        twiml('Send "#busy" with a time range or a start and a length, like "#busy 9am-5pm work" or "#busy 3pm for 2 hrs".')
       );
     }
     const label = block.label ? ` for ${block.label}` : '';

@@ -33,7 +33,7 @@ Still outstanding: the WhatsApp sandbox webhook (Console-only, see below) and
 | You text | Result |
 | --- | --- |
 | `#goals finish the LSAT application by December 1` + optional `- subtask` lines | new goal with a parsed deadline and checklist, shown under the dashboard's Goals tab |
-| `#busy 9am-5pm work` | marks that range unavailable on the day it names (today unless you say otherwise), which the nightly plan subtracts from its window |
+| `#busy 9am-5pm work` or `#busy 3pm for 2 hrs dentist` | marks that time unavailable on the day it names (today unless you say otherwise), which the nightly plan subtracts from its window |
 | `#create list Groceries` + items on following lines | new checklist entry |
 | `#todo call the dentist` | appends a bullet to the list for that calendar day (`Todo YYYY-MM-DD`), creating it on the day's first item — each line of a multi-line message becomes its own item |
 | `#done emailed the professor` | crosses the closest matching item off that day's todo list, or adds it already crossed off |
@@ -82,9 +82,17 @@ against. chrono reads the range and any day phrase in one pass — `#busy
 and whatever text is left over becomes the label. Forward-dating is off, so a
 `#busy 7-8pm dinner` sent at 8pm still means tonight rather than tomorrow.
 
-A range is required: `#busy work` or `#busy 3pm dentist` have no duration to
-subtract, so they are refused rather than stored as a zero-length block. Blocks
-append per calendar day, keyed by date in `$DATA_DIR/busy.json`, and overlapping
+A start time plus a length works too: `#busy 3pm for 2 hrs dentist`, `#busy 9am
+8 hours work`, `#busy 6am for 45 min gym`, `#busy 2pm for an hour`. chrono reads
+"for 2 hrs" as a moment two hours in the *past* rather than a length, so the
+duration is lifted out with a regex before chrono sees the text and then added
+to the start. Anything over 24h is refused.
+
+One or the other is required: `#busy work` and `#busy 3pm dentist` have no
+duration to subtract, so they are refused rather than stored as a zero-length
+block.
+
+Blocks append per calendar day, keyed by date in `$DATA_DIR/busy.json`, and overlapping
 ones are stored exactly as sent — they are collapsed only when availability is
 computed, so the file stays a faithful log. Today's blocks are listed read-only
 under the Today column.
