@@ -8,6 +8,7 @@ browse, search, and add notes from a browser.
 - `lib/notes.js` — appends notes/lists to `$DATA_DIR/notes.md`
 - `lib/tags.js` — tag registry (`$DATA_DIR/tags.json`) with keyword auto-tagging
 - `lib/goals.js` — `#goals` parsing and the goal store (`$DATA_DIR/goals.json`)
+- `lib/busy.js` — `#busy` parsing, the block store (`$DATA_DIR/busy.json`) and the free-time arithmetic
 - `lib/plan.js` — nightly plan generation (Claude) and its scheduler
 - `lib/sms.js` — outbound SMS/WhatsApp sending
 - `routes/webhook.js` — Twilio inbound webhook (`POST /webhook/sms`), signature-validated and rate-limited
@@ -32,6 +33,7 @@ Still outstanding: the WhatsApp sandbox webhook (Console-only, see below) and
 | You text | Result |
 | --- | --- |
 | `#goals finish the LSAT application by December 1` + optional `- subtask` lines | new goal with a parsed deadline and checklist, shown under the dashboard's Goals tab |
+| `#busy 9am-5pm work` | marks that range unavailable on the day it names (today unless you say otherwise), which the nightly plan subtracts from its window |
 | `#create list Groceries` + items on following lines | new checklist entry |
 | `#todo call the dentist` | appends a bullet to the list for that calendar day (`Todo YYYY-MM-DD`), creating it on the day's first item — each line of a multi-line message becomes its own item |
 | `#done emailed the professor` | crosses the closest matching item off that day's todo list, or adds it already crossed off |
@@ -72,13 +74,35 @@ not become structure. Goals live in `$DATA_DIR/goals.json` rather than
 positions, each goal and subtask carries a generated id that survives the list
 changing around it.
 
+### Busy
+
+`#busy` is the only thing that shrinks the day the nightly plan is built
+against. chrono reads the range and any day phrase in one pass — `#busy
+9am-5pm work`, `#busy tomorrow 9am-5pm work`, `#busy monday 2-4pm dentist` —
+and whatever text is left over becomes the label. Forward-dating is off, so a
+`#busy 7-8pm dinner` sent at 8pm still means tonight rather than tomorrow.
+
+A range is required: `#busy work` or `#busy 3pm dentist` have no duration to
+subtract, so they are refused rather than stored as a zero-length block. Blocks
+append per calendar day, keyed by date in `$DATA_DIR/busy.json`, and overlapping
+ones are stored exactly as sent — they are collapsed only when availability is
+computed, so the file stays a faithful log. Today's blocks are listed read-only
+under the Today column.
+
 ## Nightly plan
 
 Each night the app asks Claude for a short plan for the next day and texts it
 over. It reads active goals (with deadlines, days remaining, and each subtask's
-state), the free window (`7am–11pm` by default — there is no busy-block source
-to subtract from it yet), and the todo items crossed off over the last three
-days as loose momentum context. One API call, no SDK.
+state), the free window (`7am–11pm` by default, minus that day's `#busy`
+blocks), and the todo items crossed off over the last three days as loose
+momentum context. One API call, no SDK.
+
+When blocks exist, the prompt lists them and states the time actually left
+(`That leaves 8h free: 7:00am–9:00am, 5:00pm–11:00pm`). Overlaps are merged and
+blocks clipped to the window at this point, so a 5–8am gym slot only costs the
+hour of it that was plannable. A day with **no** free time skips the model call
+entirely and returns a sentence saying so, rather than paying to squeeze
+suggestions into time that doesn't exist.
 
 The prompt asks for at most 4 tasks and usually 2-3, and leaves the count to the
 model's read of the work: several quick, bounded tasks can share a day, while an
@@ -144,7 +168,7 @@ All of these are documented in `.env.example`.
 | `PUBLIC_URL` | **in production** | public origin, no trailing slash; must match the URL configured in Twilio, since Twilio signs that exact URL |
 | `PORT` | no | defaults to 3000 |
 | `NODE_ENV` | **in production** | set to `production` to enforce validation + auth |
-| `DATA_DIR` | no | where `notes.md`/`tags.json`/`goals.json` live; defaults to `./data` |
+| `DATA_DIR` | no | where `notes.md`/`tags.json`/`goals.json`/`busy.json` live; defaults to `./data` |
 | `DASHBOARD_USER` | no | login user, defaults to `loci` |
 | `DASHBOARD_PASSWORD` | **in production** | login password for the dashboard and `/api` |
 | `BACKUP_REMOTE` | no | rclone `remote:path` to mirror `DATA_DIR` into; backups are off when unset |
@@ -273,7 +297,7 @@ deploy needed. The volume is not touched by deploys, so notes persist.
 
 ## Persistence and backup
 
-`notes.md`, `tags.json`, and `goals.json` live in `DATA_DIR`, the Fly volume mounted at
+`notes.md`, `tags.json`, `goals.json`, and `busy.json` live in `DATA_DIR`, the Fly volume mounted at
 `/data`. The volume survives `fly deploy` and machine restarts. A Fly volume is
 attached to a single machine, so keep this app at one machine
 (`min_machines_running = 1`, no scaling out).

@@ -8,6 +8,8 @@ const layout = document.getElementById('layout');
 const todayDateEl = document.getElementById('todayDate');
 const todayItemsEl = document.getElementById('todayItems');
 const todayEmptyEl = document.getElementById('todayEmpty');
+const busyEl = document.getElementById('busy');
+const busyBlocksEl = document.getElementById('busyBlocks');
 const detail = document.getElementById('detail');
 const detailMeta = document.getElementById('detailMeta');
 const detailTitle = document.getElementById('detailTitle');
@@ -287,6 +289,22 @@ async function loadToday() {
   todayEmptyEl.hidden = items.length > 0;
 }
 
+// Read-only: blocks are logged by text, and the plan is what actually reads
+// them — this is here so the day's commitments are visible next to the todos.
+async function loadBusy() {
+  const res = await api('/api/busy');
+  const { blocks } = await res.json();
+  busyEl.hidden = !blocks.length;
+  busyBlocksEl.innerHTML = blocks
+    .map(
+      block =>
+        `<div class="busy-block"><span class="busy-time">${escapeHtml(block.time)}</span>${
+          block.label ? `<span class="busy-name">${escapeHtml(block.label)}</span>` : ''
+        }</div>`
+    )
+    .join('');
+}
+
 async function loadTags() {
   const res = await api('/api/tags');
   const tags = await res.json();
@@ -327,9 +345,15 @@ async function generatePlan() {
       planResult.innerHTML = `<p class="plan-error">${escapeHtml(data.error || 'Could not generate a plan.')}</p>`;
       return;
     }
-    planResult.innerHTML = data.suggestions.length
-      ? data.suggestions.map(planTaskHtml).join('')
-      : '<p class="plan-error">Nothing to suggest — add a goal first.</p>';
+    if (data.suggestions.length) {
+      planResult.innerHTML = data.suggestions.map(planTaskHtml).join('');
+    } else {
+      // A day with no free time left comes back with an explanation rather
+      // than tasks, and saying "add a goal first" would be a lie.
+      planResult.innerHTML = `<p class="plan-error">${escapeHtml(
+        data.fullyBooked ? data.message : 'Nothing to suggest — add a goal first.'
+      )}</p>`;
+    }
   } catch (err) {
     planResult.innerHTML = '<p class="plan-error">Could not reach the server.</p>';
   } finally {
@@ -466,16 +490,18 @@ composer.addEventListener('submit', async e => {
   showFeed();
   await loadTags();
   await loadToday();
+  await loadBusy();
   await loadGoals();
   await loadNotes();
 });
 
 loadTags();
 loadGoals();
+loadBusy();
 loadToday().then(loadNotes);
 
 // Pick up notes texted in from your phone, but never yank the feed out from
 // under someone who is reading a single entry.
 setInterval(() => {
-  if (selectedIndex === null) loadToday().then(loadGoals).then(loadNotes);
+  if (selectedIndex === null) loadToday().then(loadBusy).then(loadGoals).then(loadNotes);
 }, 15000);
