@@ -119,6 +119,41 @@ body {
 }
 .today-empty span { font-style: normal; }
 
+/* -- busy blocks -- */
+
+.busy[hidden] { display: none; }
+
+.busy {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--border);
+}
+
+.busy-label {
+  display: block;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.busy-blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.busy-block {
+  display: flex;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.busy-time { white-space: nowrap; }
+.busy-name { color: var(--ink); }
+
 /* -- plan -- */
 
 .plan {

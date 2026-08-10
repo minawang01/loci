@@ -5,6 +5,7 @@ const notes = require('../lib/notes');
 const tags = require('../lib/tags');
 const goals = require('../lib/goals');
 const done = require('../lib/done');
+const busy = require('../lib/busy');
 
 const router = express.Router();
 
@@ -71,7 +72,25 @@ router.post('/sms', webhookLimiter, validateTwilioRequest, (req, res) => {
     return res.type('text/xml').send(twiml(`Goal saved: "${goal.title}"${deadline}${subtasks}.`));
   }
 
-  // 2. New list: "#create list" followed by items on their own lines
+  // 2. "#busy 9am-5pm work" — or a start plus a length, "#busy 3pm for 2 hrs"
+  // — marks time as unavailable on the day it names, defaulting to today.
+  // Checked before the list and todo rules for the same reason #goals is: a
+  // message carrying several tags resolves to the structured one rather than
+  // becoming a list item.
+  if (busy.isBusyText(body)) {
+    const block = busy.addBlock(body);
+    if (!block) {
+      return res.type('text/xml').send(
+        twiml('Send "#busy" with a time range or a start and a length, like "#busy 9am-5pm work" or "#busy 3pm for 2 hrs".')
+      );
+    }
+    const label = block.label ? ` for ${block.label}` : '';
+    return res.type('text/xml').send(
+      twiml(`Blocked ${busy.timeRange(block)} on ${block.date}${label}.`)
+    );
+  }
+
+  // 3. New list: "#create list" followed by items on their own lines
   if (lower.startsWith('#create list')) {
     const lines = body.split('\n').map(l => l.trim()).filter(Boolean);
     const [, ...rest] = lines; // drop the "#create list" line
@@ -86,7 +105,7 @@ router.post('/sms', webhookLimiter, validateTwilioRequest, (req, res) => {
     return res.type('text/xml').send(twiml(`Created list "${listName}" with ${items.length} item(s).`));
   }
 
-  // 3. "#todo <item>" goes onto the list for the day it was sent. Each line is
+  // 4. "#todo <item>" goes onto the list for the day it was sent. Each line is
   // its own item, so a multi-line message becomes several tickable entries.
   if (/^#todo\b/i.test(body)) {
     const items = notes.todoItems(body.replace(/^#todo\b/i, ''));
@@ -98,7 +117,7 @@ router.post('/sms', webhookLimiter, validateTwilioRequest, (req, res) => {
     return res.type('text/xml').send(twiml(`Added ${summary} to today's todo list.`));
   }
 
-  // 4. "#done <what you finished>" ticks the closest item off today's list,
+  // 5. "#done <what you finished>" ticks the closest item off today's list,
   // or records it as already finished when nothing on the list resembles it.
   if (/^#done\b/i.test(body)) {
     const text = body.replace(/^#done\b/i, '').trim();
@@ -115,9 +134,9 @@ router.post('/sms', webhookLimiter, validateTwilioRequest, (req, res) => {
     );
   }
 
-  // 5. Add item to an existing list via trailing hashtag, e.g. "avocados #grocery"
+  // 6. Add item to an existing list via trailing hashtag, e.g. "avocados #grocery"
   // Only routes here if that list already exists — otherwise falls through to
-  // rule 5 below and gets saved as a regular tagged note.
+  // rule 7 below and gets saved as a regular tagged note.
   const trailingTagMatch = body.match(/#(\w+)\s*$/);
   if (trailingTagMatch) {
     const tagName = trailingTagMatch[1];
@@ -127,7 +146,7 @@ router.post('/sms', webhookLimiter, validateTwilioRequest, (req, res) => {
     }
   }
 
-  // 6. Plain note
+  // 7. Plain note
   const detectedTags = tags.detectTags(body);
   notes.appendNote(body, detectedTags);
   return res.type('text/xml').send(

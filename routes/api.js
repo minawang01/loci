@@ -3,6 +3,7 @@ const notes = require('../lib/notes');
 const tags = require('../lib/tags');
 const goals = require('../lib/goals');
 const done = require('../lib/done');
+const busy = require('../lib/busy');
 const plan = require('../lib/plan');
 const sms = require('../lib/sms');
 
@@ -26,6 +27,12 @@ router.post('/notes', (req, res) => {
   const trimmed = text.trim();
   if (goals.isGoalText(trimmed)) {
     return res.status(201).json({ ok: true, goal: goals.createGoal(trimmed) });
+  }
+
+  if (busy.isBusyText(trimmed)) {
+    const block = busy.addBlock(trimmed);
+    if (!block) return res.status(400).json({ error: 'give me a time range, like "9am-5pm"' });
+    return res.status(201).json({ ok: true, busy: block });
   }
 
   if (/^#todo\b/i.test(trimmed)) {
@@ -119,6 +126,20 @@ router.patch('/goals/:id/subtasks/:subtaskId', (req, res) => {
   const goal = goals.setSubtaskDone(req.params.id, req.params.subtaskId, done);
   if (!goal) return res.status(404).json({ error: 'goal or subtask not found' });
   res.json(goal);
+});
+
+// -- Busy blocks --
+// Day-scoped, so the dashboard can show what is already committed today
+// without loading every block ever logged.
+router.get('/busy', (req, res) => {
+  const date = req.query.date || notes.today();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
+  }
+  res.json({
+    date,
+    blocks: busy.blocksFor(date).map(block => ({ ...block, time: busy.timeRange(block) }))
+  });
 });
 
 // -- Plan --

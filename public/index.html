@@ -55,6 +55,11 @@
         <div class="today-items" id="todayItems"></div>
         <p class="today-empty" id="todayEmpty">Nothing yet. Text <span>#todo</span> to add.</p>
 
+        <div class="busy" id="busy" hidden>
+          <span class="busy-label">Busy</span>
+          <div class="busy-blocks" id="busyBlocks"></div>
+        </div>
+
         <div class="plan">
           <button class="plan-button" id="planButton" type="button">Plan tomorrow</button>
           <div class="plan-result" id="planResult" hidden></div>
@@ -75,7 +80,7 @@
   </div>
 
   <form class="composer" id="composer">
-    <input id="composerInput" type="text" placeholder="Write a note… #todo for today's list, #done to cross one off, #goals for a goal" autocomplete="off" />
+    <input id="composerInput" type="text" placeholder="Write a note… #todo for today's list, #done to cross one off, #busy 9am-5pm work, #goals for a goal" autocomplete="off" />
     <button type="submit">Save</button>
   </form>
 
