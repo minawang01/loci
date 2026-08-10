@@ -95,7 +95,7 @@ Plan for 2026-08-10:
 
 The job is off unless `ANTHROPIC_API_KEY` and `PLAN_PHONE_NUMBER` are both set,
 like backups and phone sign-in. It runs at `PLAN_SEND_TIME` (default `21:30`)
-in the **host's** local time, which on Fly is UTC unless you set `TZ`. No plan
+in the **host's** local time, which `fly.toml` pins to `America/New_York`. No plan
 is persisted — there is no plan history and no feedback loop yet.
 
 The dashboard's **Plan tomorrow** button, under the Today column, runs the same
@@ -157,7 +157,7 @@ All of these are documented in `.env.example`.
 | `PLAN_SEND_TIME` | no | 24h host-local time, defaults to `21:30` |
 | `CLAUDE_MODEL` | no | defaults to `claude-sonnet-4-6` |
 | `PLAN_DAY_START` / `PLAN_DAY_END` | no | the free window, defaults `7am`/`11pm` |
-| `TZ` | no | host timezone; set it so `PLAN_SEND_TIME` and daily todo lists roll over at your midnight, not UTC's |
+| `TZ` | no | host timezone, so note timestamps, daily todo lists and `PLAN_SEND_TIME` follow your clock rather than UTC. `fly.toml` sets `America/New_York` |
 | `WEBHOOK_RATE_LIMIT` | no | inbound requests per minute per IP, defaults to 30 |
 | `SKIP_TWILIO_VALIDATION` | no | local-only escape hatch; rejected at startup in production |
 
