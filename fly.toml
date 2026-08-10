@@ -10,6 +10,10 @@ primary_region = "sjc"
   NODE_ENV = "production"
   PORT = "8080"
   DATA_DIR = "/data"
+  # Everything the app writes or schedules uses the host clock: note
+  # timestamps, the date a todo list is named for, and PLAN_SEND_TIME. Fly
+  # machines are UTC, which rolls the day over at 8pm the evening before.
+  TZ = "America/New_York"
   # Non-secret half of the rclone config; the token goes in `fly secrets set`.
   RCLONE_CONFIG_DRIVE_TYPE = "drive"
   RCLONE_CONFIG_DRIVE_SCOPE = "drive.file"
