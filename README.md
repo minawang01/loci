@@ -81,16 +81,21 @@ against. chrono reads the range and any day phrase in one pass — `#busy
 9am-5pm work`, `#busy tomorrow 9am-5pm work`, `#busy monday 2-4pm dentist` —
 and whatever text is left over becomes the label. Forward-dating is off, so a
 `#busy 7-8pm dinner` sent at 8pm still means tonight rather than tomorrow.
+`noon` and `midnight` are rewritten to `12pm`/`12am` first, since chrono reads
+`noon to 1pm` but takes `noon-1pm` for a stray `-1`.
 
 A start time plus a length works too: `#busy 3pm for 2 hrs dentist`, `#busy 9am
 8 hours work`, `#busy 6am for 45 min gym`, `#busy 2pm for an hour`. chrono reads
 "for 2 hrs" as a moment two hours in the *past* rather than a length, so the
 duration is lifted out with a regex before chrono sees the text and then added
-to the start. Anything over 24h is refused.
+to the start.
 
 One or the other is required: `#busy work` and `#busy 3pm dentist` have no
 duration to subtract, so they are refused rather than stored as a zero-length
-block.
+block. So is anything longer than 16h, the length of the planning window
+itself — a reversed range like `#busy 5pm-3pm` is resolved by chrono as ending
+tomorrow afternoon, and a 22h block silently eating the day is far likelier to
+be a typo than a real commitment.
 
 Blocks append per calendar day, keyed by date in `$DATA_DIR/busy.json`, and overlapping
 ones are stored exactly as sent — they are collapsed only when availability is
