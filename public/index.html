@@ -23,6 +23,7 @@
         <div class="tabs" id="tabs">
           <button type="button" class="tab active" data-view="notes">Notes</button>
           <button type="button" class="tab" data-view="goals">Goals</button>
+          <button type="button" class="tab" data-view="busy">Busy</button>
         </div>
 
         <div class="search">
@@ -39,11 +40,27 @@
           <p class="empty-sub">Text your loci number, or write one below.</p>
         </div>
 
+        <div class="plan" id="plan" hidden>
+          <div class="plan-controls">
+            <label class="plan-label" for="planDate">Plan</label>
+            <input type="date" id="planDate" />
+            <button class="plan-button" id="planButton" type="button">Make a plan</button>
+          </div>
+          <div class="plan-result" id="planResult" hidden></div>
+        </div>
+
         <div class="board" id="goalBoard" hidden></div>
 
         <div class="empty-state" id="goalEmpty" hidden>
           <p>No goals yet.</p>
           <p class="empty-sub">Text <span>#goals</span> followed by what you want to achieve.</p>
+        </div>
+
+        <div class="week" id="busyBoard" hidden></div>
+
+        <div class="empty-state" id="busyEmpty" hidden>
+          <p>Nothing blocked out this week.</p>
+          <p class="empty-sub">Text <span>#busy 9am-5pm work</span>, or a start and a length like <span>#busy 3pm for 2 hrs</span>.</p>
         </div>
       </section>
 
@@ -54,16 +71,6 @@
         </div>
         <div class="today-items" id="todayItems"></div>
         <p class="today-empty" id="todayEmpty">Nothing yet. Text <span>#todo</span> to add.</p>
-
-        <div class="busy" id="busy" hidden>
-          <span class="busy-label">Busy</span>
-          <div class="busy-blocks" id="busyBlocks"></div>
-        </div>
-
-        <div class="plan">
-          <button class="plan-button" id="planButton" type="button">Plan tomorrow</button>
-          <div class="plan-result" id="planResult" hidden></div>
-        </div>
       </aside>
     </div>
 
@@ -80,7 +87,7 @@
   </div>
 
   <form class="composer" id="composer">
-    <input id="composerInput" type="text" placeholder="Write a note… #todo for today's list, #done to cross one off, #busy 9am-5pm work, #goals for a goal" autocomplete="off" />
+    <input id="composerInput" type="text" placeholder="Write a note… #todo for today's list, #done to cross one off, #busy 9am-5pm work, #goals a goal @friday" autocomplete="off" />
     <button type="submit">Save</button>
   </form>
 

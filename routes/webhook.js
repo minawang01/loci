@@ -63,11 +63,19 @@ router.post('/sms', webhookLimiter, validateTwilioRequest, (req, res) => {
   // 1. "#goals <title>" with optional "- subtask" lines. Checked before the
   // list and todo rules so a message carrying several tags becomes a goal.
   if (goals.isGoalText(body)) {
-    const goal = goals.createGoal(body);
+    const { goal, merged, addedSubtasks } = goals.createGoal(body);
     if (!goal.title && !goal.subtasks.length) {
       return res.type('text/xml').send(twiml('Saved an untitled goal — send "#goals" followed by what you want to achieve.'));
     }
     const deadline = goal.deadline ? `, due ${goal.deadline.slice(0, 10)}` : '';
+
+    // Say so when a message folded into an existing goal rather than starting
+    // one, since the difference is invisible from the phone otherwise.
+    if (merged) {
+      const added = addedSubtasks ? `, ${addedSubtasks} subtask(s) added` : '';
+      return res.type('text/xml').send(twiml(`Added to your existing goal "${goal.title}"${deadline}${added}.`));
+    }
+
     const subtasks = goal.subtasks.length ? ` with ${goal.subtasks.length} subtask(s)` : '';
     return res.type('text/xml').send(twiml(`Goal saved: "${goal.title}"${deadline}${subtasks}.`));
   }
