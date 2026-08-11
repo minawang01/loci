@@ -32,7 +32,7 @@ Still outstanding: the WhatsApp sandbox webhook (Console-only, see below) and
 
 | You text | Result |
 | --- | --- |
-| `#goals finish the LSAT application by December 1` + optional `- subtask` lines | new goal with a parsed deadline and checklist, shown under the dashboard's Goals tab |
+| `#goals finish the LSAT application @December 1` + optional `- subtask` lines | new goal with a parsed deadline and checklist, shown under the dashboard's Goals tab — or folded into an existing goal that names the same thing |
 | `#busy 9am-5pm work` or `#busy 3pm for 2 hrs dentist` | marks that time unavailable on the day it names (today unless you say otherwise), which the nightly plan subtracts from its window |
 | `#create list Groceries` + items on following lines | new checklist entry |
 | `#todo call the dentist` | appends a bullet to the list for that calendar day (`Todo YYYY-MM-DD`), creating it on the day's first item — each line of a multi-line message becomes its own item |
@@ -64,23 +64,66 @@ stays a record of what happened, not just what was planned.
 that happens to mention `#goals` mid-sentence stays a note.
 
 The first line becomes the title, or — when the tag sits alone on its line —
-the next non-empty, non-bulleted line, indented or not. [chrono-node](https://github.com/wanasit/chrono)
-reads a date phrase out of that line only (subtask lines are ignored, so
-"ask for 2 letters" is never mistaken for a time) and stores it as `deadline`,
-or `null` when there is no date. Lines starting with `-` or `*` become
+the next non-empty, non-bulleted line, indented or not. `@` marks the deadline
+explicitly — `#goals ship the essay @friday`, `#goals apply @2026-12-01` —
+which is unambiguous where prose is not. Everything after the last `@` is the
+date phrase; when it doesn't parse as a date the whole line falls back to
+[chrono-node](https://github.com/wanasit/chrono) prose parsing, so `by December
+1` still works and an `@handle` in a title is left alone. Either way the date
+is read out of the title line only (subtask lines are ignored, so "ask for 2
+letters" is never mistaken for a time) and stored as `deadline`, or `null` when
+there is no date. Lines starting with `-` or `*` become
 independently checkable subtasks; other lines are kept in `description` but do
 not become structure. Goals live in `$DATA_DIR/goals.json` rather than
 `notes.md`, since they are edited in place — unlike notes, whose ids are file
 positions, each goal and subtask carries a generated id that survives the list
 changing around it.
 
+Restating a goal amends it rather than duplicating it: `#goals tiktok essays`
+folds into an existing `tiktoks`, appending any new subtasks, filling in a
+deadline if there wasn't one, and keeping the more descriptive of the two
+titles. Two titles name the same goal when one's meaningful words (lowercased,
+depunctuated, crudely singularised, stopwords dropped) are entirely contained in
+the other's. That bar is deliberately high, because merging is destructive and
+there is no undo — a near-miss costs more than a duplicate does:
+
+- `LSAT prep` and `LSAT application` each carry a word the other lacks, so they
+  stay separate.
+- A lone generic verb identifies nothing — `run` fits `run a marathon` and `run
+  the shop` equally — so a one-word title that is only a verb never matches.
+- When two live goals fit equally well, neither is chosen: the message becomes
+  its own goal and the reply names the candidates, since picking by storage
+  order would fold it into whichever happened to be saved first. A title that
+  matches one of them *word for word* is the exception — nothing can claim it
+  more strongly — so restating the same goal amends it rather than piling up
+  duplicates. The dashboard composer shows the same warning the SMS reply does.
+- A merge is additive only. An existing deadline is left alone and a title is
+  replaced only by one carrying *more* words, so a passing mention can't
+  re-date or rename a goal behind your back — those are edits to make
+  deliberately on the Goals tab.
+
+The reply says which of the three happened, and the Goals tab can edit or
+delete either way.
+
+Goals are editable from the dashboard — title and deadline in place, delete
+behind a confirmation that names how many subtasks go with it.
+
 ### Busy
 
 `#busy` is the only thing that shrinks the day the nightly plan is built
 against. chrono reads the range and any day phrase in one pass — `#busy
 9am-5pm work`, `#busy tomorrow 9am-5pm work`, `#busy monday 2-4pm dentist` —
-and whatever text is left over becomes the label. Forward-dating is off, so a
-`#busy 7-8pm dinner` sent at 8pm still means tonight rather than tomorrow.
+and whatever text is left over becomes the label. A day named *after* the time
+instead (`#busy 7am-11pm conference on 2026-08-13`, `#busy 3pm for 1 hr jog on
+Saturday`) is a second chrono result that the time pass doesn't consume, so it
+is looked for in the leftover text and moves the whole block onto that day, by
+whole calendar days so the times survive a daylight-saving boundary. Both
+syntaxes get this.
+
+Forward-dating is off, so a `#busy 7-8pm dinner` sent at 8pm still means
+tonight rather than tomorrow — but a *named weekday* that lands in the past is
+pushed on a week, since "monday" said on a Tuesday means the coming Monday and
+a block in the past can never affect a plan.
 `noon` and `midnight` are rewritten to `12pm`/`12am` first, since chrono reads
 `noon to 1pm` but takes `noon-1pm` for a stray `-1`.
 
@@ -99,8 +142,13 @@ be a typo than a real commitment.
 
 Blocks append per calendar day, keyed by date in `$DATA_DIR/busy.json`, and overlapping
 ones are stored exactly as sent — they are collapsed only when availability is
-computed, so the file stays a faithful log. Today's blocks are listed read-only
-under the Today column.
+computed, so the file stays a faithful log.
+
+The dashboard's **Busy** tab shows the next seven days, empty ones included, so
+the week reads as a calendar rather than a list of commitments. `GET /api/busy`
+takes `from` and `days` (up to 60) and returns one record per day; a single
+block can be dropped with `DELETE /api/busy/:date/:id`, which is the only way to
+undo one — there is no `#unbusy`.
 
 ## Nightly plan
 
@@ -135,10 +183,14 @@ like backups and phone sign-in. It runs at `PLAN_SEND_TIME` (default `21:30`)
 in the **host's** local time, which `fly.toml` pins to `America/New_York`. No plan
 is persisted — there is no plan history and no feedback loop yet.
 
-The dashboard's **Plan tomorrow** button, under the Today column, runs the same
+The dashboard's **Make a plan** control, on the Goals tab, runs the same
 generation on demand and shows the result on the page rather than texting it —
-which is the only way to read a plan while outbound SMS is carrier-blocked.
-It calls `POST /api/plan`, which texts the plan too when passed `{"send": true}`
+which is the only way to read a plan while outbound SMS is carrier-blocked. Any
+day from today onwards can be picked, not just tomorrow; the chosen date drives
+everything downstream, including which `#busy` blocks are subtracted and how
+many days remain on each goal.
+It calls `POST /api/plan` with an optional `{"date": "YYYY-MM-DD"}` — omitted,
+it still means tomorrow — which texts the plan too when passed `{"send": true}`
 and a `PLAN_PHONE_NUMBER` is configured. A send failure does not lose the plan:
 the response still carries it, with `sendError` alongside.
 

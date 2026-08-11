@@ -8,8 +8,8 @@ const layout = document.getElementById('layout');
 const todayDateEl = document.getElementById('todayDate');
 const todayItemsEl = document.getElementById('todayItems');
 const todayEmptyEl = document.getElementById('todayEmpty');
-const busyEl = document.getElementById('busy');
-const busyBlocksEl = document.getElementById('busyBlocks');
+const busyBoard = document.getElementById('busyBoard');
+const busyEmpty = document.getElementById('busyEmpty');
 const detail = document.getElementById('detail');
 const detailMeta = document.getElementById('detailMeta');
 const detailTitle = document.getElementById('detailTitle');
@@ -20,18 +20,36 @@ const detailDelete = document.getElementById('detailDelete');
 const logoutButton = document.getElementById('logout');
 const searchInput = document.getElementById('search');
 const tagFilterEl = document.getElementById('tagFilter');
+const planEl = document.getElementById('plan');
 const planButton = document.getElementById('planButton');
+const planDateInput = document.getElementById('planDate');
 const planResult = document.getElementById('planResult');
 const composer = document.getElementById('composer');
 const composerInput = document.getElementById('composerInput');
+const composerNotice = document.getElementById('composerNotice');
+
+let noticeTimer = null;
+
+function notify(message) {
+  composerNotice.textContent = message;
+  composerNotice.hidden = false;
+  clearTimeout(noticeTimer);
+  noticeTimer = setTimeout(() => {
+    composerNotice.hidden = true;
+  }, 12000);
+}
 
 const PREVIEW_ITEMS = 4;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const WEEK = 7;
 
 let activeTag = null;
 let activeView = 'notes';
 let entries = [];
 let goals = [];
+let busyDays = [];
+let editingGoal = null;
 let selectedIndex = null;
 let todayListTitle = null;
 let todayEntry = null;
@@ -176,6 +194,23 @@ function formatDeadline(iso) {
   return `${label} · in ${days} days`;
 }
 
+// A date input speaks YYYY-MM-DD in local time; a deadline is stored as an
+// instant. Both directions go through midday so a timezone offset can't shift
+// the day either way.
+function localDay(date) {
+  const pad = n => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function deadlineInputValue(iso) {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? '' : localDay(date);
+}
+
+function deadlineFromInput(value) {
+  return value ? new Date(`${value}T12:00:00`).toISOString() : null;
+}
+
 function goalSubtaskHtml(goal) {
   return goal.subtasks
     .map(
@@ -213,11 +248,27 @@ function renderGoals() {
         <span class="card-date">${escapeHtml(createdLabel)}</span>
         ${goal.deadline ? `<span class="card-tag">${escapeHtml(formatDeadline(goal.deadline))}</span>` : ''}
       </div>
-      <div class="card-title">${escapeHtml(goal.title || 'Untitled goal')}</div>
+      ${
+        editingGoal === goal.id
+          ? `<div class="goal-edit">
+               <input type="text" class="goal-edit-title" data-edit-title value="${escapeHtml(goal.title || '')}" placeholder="What do you want to achieve?" />
+               <input type="date" class="goal-edit-date" data-edit-deadline value="${goal.deadline ? deadlineInputValue(goal.deadline) : ''}" />
+             </div>`
+          : `<div class="card-title">${escapeHtml(goal.title || 'Untitled goal')}</div>`
+      }
       <div class="card-items">${goalSubtaskHtml(goal)}</div>
-      <button type="button" class="goal-status" data-status>
-        ${goal.status === 'done' ? 'Mark active' : 'Mark complete'}
-      </button>
+      <div class="goal-actions">
+        ${
+          editingGoal === goal.id
+            ? `<button type="button" class="goal-status" data-save>Save</button>
+               <button type="button" class="goal-link" data-cancel>Cancel</button>`
+            : `<button type="button" class="goal-status" data-status>
+                 ${goal.status === 'done' ? 'Mark active' : 'Mark complete'}
+               </button>
+               <button type="button" class="goal-link" data-edit>Edit</button>
+               <button type="button" class="goal-link danger" data-delete-goal>Delete</button>`
+        }
+      </div>
     `;
     goalBoard.appendChild(card);
   });
@@ -229,15 +280,67 @@ async function loadGoals() {
   renderGoals();
 }
 
+// "2026-08-11" -> "Tuesday · Aug 11", with today and tomorrow named instead,
+// which is how you actually think about the week ahead.
+function dayHeading(date, index) {
+  const parsed = new Date(`${date}T12:00:00`);
+  const label = `${MONTHS[parsed.getMonth()]} ${parsed.getDate()}`;
+  if (index === 0) return { name: 'Today', label };
+  if (index === 1) return { name: 'Tomorrow', label };
+  return { name: DAYS[parsed.getDay()], label };
+}
+
+function renderBusy() {
+  const total = busyDays.reduce((count, day) => count + day.blocks.length, 0);
+  busyEmpty.hidden = activeView !== 'busy' || total > 0;
+  busyBoard.innerHTML = busyDays
+    .map((day, index) => {
+      const { name, label } = dayHeading(day.date, index);
+      return `<div class="week-day${day.blocks.length ? '' : ' free'}">
+        <div class="week-head">
+          <span class="week-name">${escapeHtml(name)}</span>
+          <span class="week-date">${escapeHtml(label)}</span>
+        </div>
+        ${
+          day.blocks.length
+            ? day.blocks
+                .map(
+                  block => `<div class="busy-block">
+                    <span class="busy-time">${escapeHtml(block.time)}</span>
+                    ${block.label ? `<span class="busy-name">${escapeHtml(block.label)}</span>` : ''}
+                    <button type="button" class="busy-delete" data-date="${escapeHtml(day.date)}" data-block="${escapeHtml(block.id)}" aria-label="Delete this block">×</button>
+                  </div>`
+                )
+                .join('')
+            : '<div class="week-free">Open</div>'
+        }
+      </div>`;
+    })
+    .join('');
+}
+
+async function loadBusy() {
+  const res = await api(`/api/busy?days=${WEEK}`);
+  const { days } = await res.json();
+  busyDays = days;
+  renderBusy();
+}
+
 function showView(view) {
   activeView = view;
   const notesView = view === 'notes';
+  const goalsView = view === 'goals';
+  const busyView = view === 'busy';
   searchEl.hidden = !notesView;
   tagFilterEl.hidden = !notesView;
   board.hidden = !notesView;
   emptyState.hidden = !notesView || entries.length > 0;
-  goalBoard.hidden = notesView;
-  goalEmpty.hidden = notesView || goals.length > 0;
+  goalBoard.hidden = !goalsView;
+  goalEmpty.hidden = !goalsView || goals.length > 0;
+  // Planning is a thing you do against your goals, so it lives with them.
+  planEl.hidden = !goalsView;
+  busyBoard.hidden = !busyView;
+  busyEmpty.hidden = !busyView || busyDays.some(day => day.blocks.length);
   tabsEl.querySelectorAll('.tab').forEach(tab => {
     tab.classList.toggle('active', tab.dataset.view === view);
   });
@@ -289,22 +392,6 @@ async function loadToday() {
   todayEmptyEl.hidden = items.length > 0;
 }
 
-// Read-only: blocks are logged by text, and the plan is what actually reads
-// them — this is here so the day's commitments are visible next to the todos.
-async function loadBusy() {
-  const res = await api('/api/busy');
-  const { blocks } = await res.json();
-  busyEl.hidden = !blocks.length;
-  busyBlocksEl.innerHTML = blocks
-    .map(
-      block =>
-        `<div class="busy-block"><span class="busy-time">${escapeHtml(block.time)}</span>${
-          block.label ? `<span class="busy-name">${escapeHtml(block.label)}</span>` : ''
-        }</div>`
-    )
-    .join('');
-}
-
 async function loadTags() {
   const res = await api('/api/tags');
   const tags = await res.json();
@@ -337,7 +424,7 @@ async function generatePlan() {
     const res = await api('/api/plan', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({})
+      body: JSON.stringify(planDateInput.value ? { date: planDateInput.value } : {})
     });
     const data = await res.json();
 
@@ -358,7 +445,7 @@ async function generatePlan() {
     planResult.innerHTML = '<p class="plan-error">Could not reach the server.</p>';
   } finally {
     planButton.disabled = false;
-    planButton.textContent = 'Plan tomorrow';
+    planButton.textContent = 'Make a plan';
   }
 }
 
@@ -440,6 +527,54 @@ goalBoard.addEventListener('click', async e => {
     });
     return loadGoals();
   }
+
+  if (e.target.closest('[data-edit]')) {
+    editingGoal = id;
+    return renderGoals();
+  }
+
+  if (e.target.closest('[data-cancel]')) {
+    editingGoal = null;
+    return renderGoals();
+  }
+
+  if (e.target.closest('[data-save]')) {
+    const title = card.querySelector('[data-edit-title]').value.trim();
+    if (!title) return window.alert('A goal needs a title.');
+    const res = await api(`/api/goals/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title,
+        deadline: deadlineFromInput(card.querySelector('[data-edit-deadline]').value)
+      })
+    });
+    if (!res.ok) window.alert('Could not save that goal.');
+    editingGoal = null;
+    return loadGoals();
+  }
+
+  // Subtasks go with the goal, so say how many are about to disappear.
+  if (e.target.closest('[data-delete-goal]')) {
+    const goal = goals.find(g => g.id === id);
+    const subtasks = goal && goal.subtasks.length ? ` and its ${goal.subtasks.length} subtask(s)` : '';
+    if (!window.confirm(`Delete "${goal ? goal.title : 'this goal'}"${subtasks}? This cannot be undone.`)) return;
+    const res = await api(`/api/goals/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (!res.ok) window.alert('Could not delete that goal.');
+    return loadGoals();
+  }
+});
+
+busyBoard.addEventListener('click', async e => {
+  const button = e.target.closest('[data-block]');
+  if (!button) return;
+  if (!window.confirm('Delete this busy block?')) return;
+  const res = await api(
+    `/api/busy/${encodeURIComponent(button.dataset.date)}/${encodeURIComponent(button.dataset.block)}`,
+    { method: 'DELETE' }
+  );
+  if (!res.ok) window.alert('Could not delete that block.');
+  loadBusy();
 });
 
 backButton.addEventListener('click', () => {
@@ -452,6 +587,13 @@ detailDelete.addEventListener('click', () => {
 });
 
 planButton.addEventListener('click', generatePlan);
+
+// Tomorrow by default — the day the nightly job plans — and no way to pick a
+// day that has already happened.
+const tomorrow = new Date();
+tomorrow.setDate(tomorrow.getDate() + 1);
+planDateInput.value = localDay(tomorrow);
+planDateInput.min = localDay(new Date());
 
 logoutButton.addEventListener('click', async () => {
   await fetch('/logout', { method: 'POST' });
@@ -482,11 +624,21 @@ composer.addEventListener('submit', async e => {
   const text = composerInput.value.trim();
   if (!text) return;
   composerInput.value = '';
-  await api('/api/notes', {
+  const res = await api('/api/notes', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text })
   });
+  // The server declines to guess between equally good goals; without this the
+  // dashboard would just show a duplicate appearing, with no hint why.
+  const { ambiguous } = await res.json().catch(() => ({}));
+  if (ambiguous && ambiguous.length) {
+    notify(
+      `Saved as its own goal — it could have joined ${ambiguous
+        .map(title => `“${title}”`)
+        .join(' or ')}.`
+    );
+  }
   showFeed();
   await loadTags();
   await loadToday();
@@ -503,5 +655,8 @@ loadToday().then(loadNotes);
 // Pick up notes texted in from your phone, but never yank the feed out from
 // under someone who is reading a single entry.
 setInterval(() => {
-  if (selectedIndex === null) loadToday().then(loadBusy).then(loadGoals).then(loadNotes);
+  // Not while a goal is open for editing — reloading would discard the edit.
+  if (selectedIndex === null && editingGoal === null) {
+    loadToday().then(loadBusy).then(loadGoals).then(loadNotes);
+  }
 }, 15000);
