@@ -26,6 +26,18 @@ const planDateInput = document.getElementById('planDate');
 const planResult = document.getElementById('planResult');
 const composer = document.getElementById('composer');
 const composerInput = document.getElementById('composerInput');
+const composerNotice = document.getElementById('composerNotice');
+
+let noticeTimer = null;
+
+function notify(message) {
+  composerNotice.textContent = message;
+  composerNotice.hidden = false;
+  clearTimeout(noticeTimer);
+  noticeTimer = setTimeout(() => {
+    composerNotice.hidden = true;
+  }, 12000);
+}
 
 const PREVIEW_ITEMS = 4;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -612,11 +624,21 @@ composer.addEventListener('submit', async e => {
   const text = composerInput.value.trim();
   if (!text) return;
   composerInput.value = '';
-  await api('/api/notes', {
+  const res = await api('/api/notes', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text })
   });
+  // The server declines to guess between equally good goals; without this the
+  // dashboard would just show a duplicate appearing, with no hint why.
+  const { ambiguous } = await res.json().catch(() => ({}));
+  if (ambiguous && ambiguous.length) {
+    notify(
+      `Saved as its own goal — it could have joined ${ambiguous
+        .map(title => `“${title}”`)
+        .join(' or ')}.`
+    );
+  }
   showFeed();
   await loadTags();
   await loadToday();

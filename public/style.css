@@ -677,6 +677,21 @@ body {
 }
 .composer button:hover { border-color: var(--ink); color: var(--ink); }
 
+/* Sits directly above the composer, which is itself fixed to the bottom. */
+.composer-notice {
+  position: fixed;
+  bottom: 58px;
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 10px 40px;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  font-style: italic;
+  color: var(--muted);
+}
+
 @media (max-width: 900px) {
   .layout { grid-template-columns: minmax(0, 1fr); gap: 44px; }
   .today {

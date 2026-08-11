@@ -93,7 +93,10 @@ there is no undo — a near-miss costs more than a duplicate does:
   the shop` equally — so a one-word title that is only a verb never matches.
 - When two live goals fit equally well, neither is chosen: the message becomes
   its own goal and the reply names the candidates, since picking by storage
-  order would fold it into whichever happened to be saved first.
+  order would fold it into whichever happened to be saved first. A title that
+  matches one of them *word for word* is the exception — nothing can claim it
+  more strongly — so restating the same goal amends it rather than piling up
+  duplicates. The dashboard composer shows the same warning the SMS reply does.
 - A merge is additive only. An existing deadline is left alone and a title is
   replaced only by one carrying *more* words, so a passing mention can't
   re-date or rename a goal behind your back — those are edits to make
@@ -110,12 +113,17 @@ behind a confirmation that names how many subtasks go with it.
 `#busy` is the only thing that shrinks the day the nightly plan is built
 against. chrono reads the range and any day phrase in one pass — `#busy
 9am-5pm work`, `#busy tomorrow 9am-5pm work`, `#busy monday 2-4pm dentist` —
-and whatever text is left over becomes the label. A day named *after* the range
-instead (`#busy 7am-11pm conference on 2026-08-13`) is a second chrono result
-that the range pass doesn't consume, so it is looked for in the leftover text
-and moves the whole block onto that day, by whole calendar days so the times
-survive a daylight-saving boundary. Forward-dating is off, so a
-`#busy 7-8pm dinner` sent at 8pm still means tonight rather than tomorrow.
+and whatever text is left over becomes the label. A day named *after* the time
+instead (`#busy 7am-11pm conference on 2026-08-13`, `#busy 3pm for 1 hr jog on
+Saturday`) is a second chrono result that the time pass doesn't consume, so it
+is looked for in the leftover text and moves the whole block onto that day, by
+whole calendar days so the times survive a daylight-saving boundary. Both
+syntaxes get this.
+
+Forward-dating is off, so a `#busy 7-8pm dinner` sent at 8pm still means
+tonight rather than tomorrow — but a *named weekday* that lands in the past is
+pushed on a week, since "monday" said on a Tuesday means the coming Monday and
+a block in the past can never affect a plan.
 `noon` and `midnight` are rewritten to `12pm`/`12am` first, since chrono reads
 `noon to 1pm` but takes `noon-1pm` for a stray `-1`.
 
