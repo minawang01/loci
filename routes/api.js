@@ -26,8 +26,8 @@ router.post('/notes', (req, res) => {
   // points agree on what a message means.
   const trimmed = text.trim();
   if (goals.isGoalText(trimmed)) {
-    const { goal, merged } = goals.createGoal(trimmed);
-    return res.status(201).json({ ok: true, goal, merged });
+    const { goal, merged, ambiguous } = goals.createGoal(trimmed);
+    return res.status(201).json({ ok: true, goal, merged, ambiguous });
   }
 
   if (busy.isBusyText(trimmed)) {
@@ -106,8 +106,8 @@ router.get('/goals', (req, res) => res.json(goals.loadGoals()));
 router.post('/goals', (req, res) => {
   const { text } = req.body;
   if (!text || !text.trim()) return res.status(400).json({ error: 'text is required' });
-  const { goal, merged } = goals.createGoal(text.trim());
-  res.status(201).json({ ...goal, merged });
+  const { goal, merged, ambiguous } = goals.createGoal(text.trim());
+  res.status(201).json({ ...goal, merged, ambiguous });
 });
 
 // One endpoint for three edits, since the dashboard sends whichever the user
