@@ -14,7 +14,15 @@ const {
   clearSessionCookie
 } = require('./lib/auth');
 const otp = require('./lib/otp');
-const { DATA_DIR, ensureDataDir } = require('./lib/paths');
+const { DATA_DIR } = require('./lib/paths');
+const LocalFileStorageProvider = require('./lib/storage/LocalFileStorageProvider');
+const notes = require('./lib/notes');
+const tags = require('./lib/tags');
+const goals = require('./lib/goals');
+const busy = require('./lib/busy');
+const createClaimRouter = require('./routes/claim');
+
+const storageProvider = new LocalFileStorageProvider();
 const { startBackups } = require('./lib/backup');
 const { startPlanScheduler } = require('./lib/plan');
 
@@ -44,7 +52,15 @@ function assertProductionConfig() {
 }
 
 if (IS_PRODUCTION) assertProductionConfig();
-ensureDataDir();
+storageProvider.ensureDataDir && storageProvider.ensureDataDir();
+// Wire storage provider into modules that previously used the filesystem directly
+notes.setStorageProvider(storageProvider);
+tags.setStorageProvider(storageProvider);
+goals.setStorageProvider(storageProvider);
+busy.setStorageProvider(storageProvider);
+const UserAccountRepository = require('./lib/accounts/UserAccountRepository');
+const accountRepo = new UserAccountRepository();
+app.use('/claim', createClaimRouter(accountRepo));
 startBackups();
 startPlanScheduler();
 

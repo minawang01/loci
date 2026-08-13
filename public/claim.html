@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Loci - Claim</title>
+  </head>
+  <body>
+    <h1>Claim your Loci number</h1>
+    <p id="status">Preparing...</p>
+    <button id="proceed">Continue to connect account</button>
+
+    <script>
+      const params = new URLSearchParams(location.search);
+      const token = params.get('token');
+      document.getElementById('status').textContent = token ? `Token: ${token}` : 'No token supplied';
+        document.getElementById('proceed').addEventListener('click', async () => {
+          if (!token) return alert('No token');
+          // Redirect to the OAuth start endpoint with state=token
+          location.href = `/claim/google/start?token=${encodeURIComponent(token)}`;
+        });
+    </script>
+  </body>
+ </html>

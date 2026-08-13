@@ -7,7 +7,8 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "backup": "node -e \"require('dotenv').config(); require('./lib/backup').runBackup()\"",
-    "plan": "node -e \"require('dotenv').config(); require('./lib/plan').runNightlyPlan()\""
+    "plan": "node -e \"require('dotenv').config(); require('./lib/plan').runNightlyPlan()\"",
+    "test": "mocha"
   },
   "dependencies": {
     "body-parser": "^1.20.2",
@@ -15,6 +16,11 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "express-rate-limit": "8.6.0",
-    "twilio": "^5.2.2"
+    "twilio": "^5.2.2",
+    "better-sqlite3": "^8.2.0",
+    "googleapis": "^121.0.0"
+  },
+  "devDependencies": {
+    "mocha": "^10.2.0"
   }
 }
