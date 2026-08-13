@@ -15,6 +15,8 @@ browse, search, and add notes from a browser.
 - `routes/api.js` — JSON API behind the auth gate
 - `public/` — dashboard and login page
 
+API docs: [docs/API.md](docs/API.md)
+
 ## Current deployment
 
 | | |
