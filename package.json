@@ -7,7 +7,7 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "backup": "node -e \"require('dotenv').config(); require('./lib/backup').runBackup()\"",
-    "plan": "node -e \"require('dotenv').config(); require('./lib/plan').runNightlyPlan()\"",
+    "plan": "node bin/run-plan.js",
     "test": "mocha"
   },
   "dependencies": {

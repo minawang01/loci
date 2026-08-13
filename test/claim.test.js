@@ -6,6 +6,17 @@ const createClaimRouter = require('../routes/claim');
 const UserAccountRepository = require('../lib/accounts/UserAccountRepository');
 
 describe('Claim flow routes', function() {
+  const originalHashSecret = process.env.ACCOUNT_HASH_SECRET;
+
+  before(function() {
+    process.env.ACCOUNT_HASH_SECRET = 'test-secret';
+  });
+
+  after(function() {
+    if (originalHashSecret === undefined) delete process.env.ACCOUNT_HASH_SECRET;
+    else process.env.ACCOUNT_HASH_SECRET = originalHashSecret;
+  });
+
   it('creates and completes a claim', async function() {
     const app = express();
     app.use(bodyParser.json());
@@ -34,8 +45,7 @@ describe('Claim flow routes', function() {
       });
     }
 
-    const phoneHash = 'ph_test_123';
-    const r1 = await post('/claim/request', { phone_number_hash: phoneHash });
+    const r1 = await post('/claim/request', { phone: '+14025551234' });
     assert.strictEqual(r1.status, 200);
     assert.ok(r1.body.token);
     const token = r1.body.token;
@@ -43,7 +53,8 @@ describe('Claim flow routes', function() {
     const r2 = await post('/claim/complete', { token, provider_folder_id: 'pf1' });
     assert.strictEqual(r2.status, 200);
 
-    const acct = repo.findByPhoneHash(phoneHash);
+    const { hashPhone } = require('../lib/phone');
+    const acct = repo.findByPhoneHash(hashPhone('+14025551234'));
     assert.ok(acct);
     assert.strictEqual(acct.provider_folder_id, 'pf1');
 

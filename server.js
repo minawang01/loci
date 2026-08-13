@@ -4,8 +4,8 @@ const bodyParser = require('body-parser');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 
-const webhookRoutes = require('./routes/webhook');
-const apiRoutes = require('./routes/api');
+const createWebhookRouter = require('./routes/webhook');
+const createApiRouter = require('./routes/api');
 const {
   requireAuth,
   isAuthenticated,
@@ -16,15 +16,13 @@ const {
 const otp = require('./lib/otp');
 const { DATA_DIR } = require('./lib/paths');
 const LocalFileStorageProvider = require('./lib/storage/LocalFileStorageProvider');
-const notes = require('./lib/notes');
-const tags = require('./lib/tags');
-const goals = require('./lib/goals');
-const busy = require('./lib/busy');
+const { buildStores } = require('./lib/stores');
+const createPlanModule = require('./lib/plan');
+const sms = require('./lib/sms');
 const createClaimRouter = require('./routes/claim');
 
 const storageProvider = new LocalFileStorageProvider();
 const { startBackups } = require('./lib/backup');
-const { startPlanScheduler } = require('./lib/plan');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -35,7 +33,7 @@ const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 app.set('trust proxy', 1);
 
 function assertProductionConfig() {
-  const missing = ['TWILIO_AUTH_TOKEN', 'PUBLIC_URL', 'DASHBOARD_PASSWORD'].filter(
+  const missing = ['TWILIO_AUTH_TOKEN', 'PUBLIC_URL', 'DASHBOARD_PASSWORD', 'OWNER_PHONE_NUMBER'].filter(
     key => !process.env[key]
   );
   if (missing.length) {
@@ -53,16 +51,16 @@ function assertProductionConfig() {
 
 if (IS_PRODUCTION) assertProductionConfig();
 storageProvider.ensureDataDir && storageProvider.ensureDataDir();
-// Wire storage provider into modules that previously used the filesystem directly
-notes.setStorageProvider(storageProvider);
-tags.setStorageProvider(storageProvider);
-goals.setStorageProvider(storageProvider);
-busy.setStorageProvider(storageProvider);
+// The owner (OWNER_PHONE_NUMBER) always reads/writes local disk through this
+// bundle. Everyone else who texts in gets their own bundle bound to their
+// linked Google Drive — see lib/accounts/resolveSender.js.
+const ownerStores = buildStores(storageProvider);
+const plan = createPlanModule(ownerStores);
 const UserAccountRepository = require('./lib/accounts/UserAccountRepository');
 const accountRepo = new UserAccountRepository();
 app.use('/claim', createClaimRouter(accountRepo));
 startBackups();
-startPlanScheduler();
+plan.startPlanScheduler();
 
 app.use(bodyParser.urlencoded({ extended: false })); // Twilio posts form-encoded
 app.use(bodyParser.json());
@@ -71,7 +69,10 @@ app.get('/health', (req, res) => res.json({ ok: true }));
 
 // Twilio authenticates itself with a request signature, so the webhook sits in
 // front of the basic-auth gate that protects everything else.
-app.use('/webhook', webhookRoutes);
+app.use(
+  '/webhook',
+  createWebhookRouter({ accountRepo, ownerStores, ownerPhone: process.env.OWNER_PHONE_NUMBER })
+);
 
 // A2P 10DLC campaign registration requires a publicly reachable privacy policy
 // and terms, so these two sit outside the auth gate. They describe the app, not
@@ -163,7 +164,7 @@ app.post('/logout', (req, res) => {
   res.json({ ok: true });
 });
 
-app.use('/api', requireAuth, apiRoutes);
+app.use('/api', requireAuth, createApiRouter(ownerStores, { plan, sms }));
 app.use(requireAuth, express.static(path.join(__dirname, 'public')));
 
 app.listen(PORT, () => {

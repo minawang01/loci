@@ -1,13 +1,7 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const twilio = require('twilio');
-const notes = require('../lib/notes');
-const tags = require('../lib/tags');
-const goals = require('../lib/goals');
-const done = require('../lib/done');
-const busy = require('../lib/busy');
-
-const router = express.Router();
+const { resolveSender } = require('../lib/accounts/resolveSender');
 
 // A personal number sends a handful of messages a minute at most; anything
 // beyond that on a public URL is abuse or a retry storm.
@@ -51,19 +45,15 @@ function validateTwilioRequest(req, res, next) {
   next();
 }
 
-router.post('/sms', webhookLimiter, validateTwilioRequest, (req, res) => {
-  const body = (req.body.Body || '').trim();
-
-  if (!body) {
-    return res.type('text/xml').send(twiml('Got an empty message — nothing saved.'));
-  }
-
+// Applies one message body against a resolved sender's stores. Split out from
+// the route handler so the routing/error-handling above stays easy to read.
+async function handleMessage({ res, body, notes, tags, goals, busy, done }) {
   const lower = body.toLowerCase();
 
   // 1. "#goals <title>" with optional "- subtask" lines. Checked before the
   // list and todo rules so a message carrying several tags becomes a goal.
   if (goals.isGoalText(body)) {
-    const { goal, merged, addedSubtasks, ambiguous } = goals.createGoal(body);
+    const { goal, merged, addedSubtasks, ambiguous } = await goals.createGoal(body);
     if (!goal.title && !goal.subtasks.length) {
       return res.type('text/xml').send(twiml('Saved an untitled goal — send "#goals" followed by what you want to achieve.'));
     }
@@ -99,7 +89,7 @@ router.post('/sms', webhookLimiter, validateTwilioRequest, (req, res) => {
   // message carrying several tags resolves to the structured one rather than
   // becoming a list item.
   if (busy.isBusyText(body)) {
-    const block = busy.addBlock(body);
+    const block = await busy.addBlock(body);
     if (!block) {
       return res.type('text/xml').send(
         twiml('Send "#busy" with a time range or a start and a length, like "#busy 9am-5pm work" or "#busy 3pm for 2 hrs".')
@@ -121,8 +111,8 @@ router.post('/sms', webhookLimiter, validateTwilioRequest, (req, res) => {
     const items = rest.length ? rest : [];
     // Detect tags from the list name and items only — not the "#create list"
     // command itself, or "create" would get picked up as a spurious tag.
-    const detectedTags = tags.detectTags(`${listName} ${items.join(' ')}`);
-    notes.createList(listName, items, detectedTags.length ? detectedTags : [listName]);
+    const detectedTags = await tags.detectTags(`${listName} ${items.join(' ')}`);
+    await notes.createList(listName, items, detectedTags.length ? detectedTags : [listName]);
     return res.type('text/xml').send(twiml(`Created list "${listName}" with ${items.length} item(s).`));
   }
 
@@ -133,7 +123,7 @@ router.post('/sms', webhookLimiter, validateTwilioRequest, (req, res) => {
     if (!items.length) {
       return res.type('text/xml').send(twiml('Send "#todo" followed by what you need to do.'));
     }
-    notes.addToDailyTodo(items);
+    await notes.addToDailyTodo(items);
     const summary = items.length === 1 ? `"${items[0]}"` : `${items.length} items`;
     return res.type('text/xml').send(twiml(`Added ${summary} to today's todo list.`));
   }
@@ -142,7 +132,7 @@ router.post('/sms', webhookLimiter, validateTwilioRequest, (req, res) => {
   // or records it as already finished when nothing on the list resembles it.
   if (/^#done\b/i.test(body)) {
     const text = body.replace(/^#done\b/i, '').trim();
-    const result = done.markDone(text);
+    const result = await done.markDone(text);
     if (!result) {
       return res.type('text/xml').send(twiml('Send "#done" followed by what you finished.'));
     }
@@ -162,17 +152,66 @@ router.post('/sms', webhookLimiter, validateTwilioRequest, (req, res) => {
   if (trailingTagMatch) {
     const tagName = trailingTagMatch[1];
     const item = body.replace(trailingTagMatch[0], '').trim();
-    if (item && notes.addItemToList(tagName, item)) {
+    if (item && (await notes.addItemToList(tagName, item))) {
       return res.type('text/xml').send(twiml(`Added "${item}" to your ${tagName} list.`));
     }
   }
 
   // 7. Plain note
-  const detectedTags = tags.detectTags(body);
-  notes.appendNote(body, detectedTags);
+  const detectedTags = await tags.detectTags(body);
+  await notes.appendNote(body, detectedTags);
   return res.type('text/xml').send(
     twiml(detectedTags.length ? `Saved, tagged: ${detectedTags.join(', ')}.` : 'Saved.')
   );
-});
+}
 
-module.exports = router;
+// `ownerStores` (local disk) is used for OWNER_PHONE_NUMBER; every other
+// sender is routed by lib/accounts/resolveSender.js to their own linked
+// Google Drive, or told how to link one if they haven't yet.
+function createWebhookRouter({ accountRepo, ownerStores, ownerPhone }) {
+  const router = express.Router();
+
+  router.post('/sms', webhookLimiter, validateTwilioRequest, async (req, res) => {
+    const body = (req.body.Body || '').trim();
+
+    if (!body) {
+      return res.type('text/xml').send(twiml('Got an empty message — nothing saved.'));
+    }
+
+    let resolved;
+    try {
+      resolved = await resolveSender({
+        fromNumber: req.body.From,
+        accountRepo,
+        ownerStores,
+        ownerPhone,
+        publicUrl: process.env.PUBLIC_URL
+      });
+    } catch (err) {
+      console.error('Failed to resolve sender for webhook:', err.message);
+      return res.type('text/xml').send(twiml('Something went wrong on our end — try again shortly.'));
+    }
+
+    if (resolved.kind === 'invalid') {
+      return res.type('text/xml').send(twiml('Could not read your number.'));
+    }
+    if (resolved.kind === 'unclaimed') {
+      return res.type('text/xml').send(
+        twiml(`Connect your Google account to start saving notes: ${resolved.claimUrl}`)
+      );
+    }
+
+    const { notes, tags, goals, busy, done } = resolved.stores;
+
+    try {
+      return await handleMessage({ res, body, notes, tags, goals, busy, done });
+    } catch (err) {
+      console.error('Failed to handle webhook message:', err.message);
+      return res.type('text/xml').send(twiml('Something went wrong saving that — try again shortly.'));
+    }
+  });
+
+  return router;
+}
+
+module.exports = createWebhookRouter;

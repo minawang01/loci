@@ -4,44 +4,52 @@ This document describes the HTTP endpoints, OAuth claim flow, and environment va
 
 **Claim / OAuth**
 - POST /claim/request
-  - Description: Create a one-time claim token for a phone number. Used when a user initiates account linking.
+  - Description: Create a one-time claim token for a phone number. The number is normalized and hashed server-side (HMAC-SHA256, `ACCOUNT_HASH_SECRET`) before it touches the database — the raw number is never stored.
   - Body: { "phone": "+15551234567" }
-  - Response: { "token": "<short-token>" }
+  - Response: { "ok": true, "token": "<short-token>", "url": "<claim url>", "expires_at": "<ISO date>" }
 
 - POST /claim/complete
-  - Description: Validate and consume a claim token to attach an account. Typically called by the server after OAuth completes or by the UI when the token is presented.
-  - Body: { "token": "<token>", "accountId": "<optional>" }
+  - Description: Validate and consume a claim token to attach an account. Used for non-OAuth / manual completion; the OAuth flow below is the normal path. A plaintext `refresh_token`, if given, is encrypted (`TOKEN_ENCRYPTION_KEY`) before being stored.
+  - Body: { "token": "<token>", "storage_provider": "google_drive", "provider_folder_id": "<optional>", "refresh_token": "<optional plaintext>" }
   - Response: { "ok": true }
 
 - GET /claim/google/start?token=<token>
-  - Description: Redirects the browser to Google's OAuth consent page. `token` is passed in the OAuth `state` param so the callback can associate the response with the claim.
+  - Description: Redirects the browser to Google's OAuth consent page (`drive.file` scope). `token` is passed in the OAuth `state` param so the callback can associate the response with the claim.
 
 - GET /claim/google/callback?code=...&state=<token>
-  - Description: OAuth callback endpoint. Exchanges the code for tokens, stores the refresh token on the `user_accounts` row, and marks the account as claimed.
+  - Description: OAuth callback endpoint. Exchanges the code for tokens, encrypts the refresh token, stores it on the `user_accounts` row, and marks the account as claimed.
 
 **Other HTTP routes**
 - POST /webhook/sms
-  - Description: Twilio webhook for incoming SMS messages. Messages are routed to the account associated with the phone hash.
-  - Note: See [routes/webhook.js](routes/webhook.js) for routing logic.
+  - Description: Twilio webhook for incoming SMS/WhatsApp messages. The sender's number (Twilio's `From` field) is resolved to a storage destination by [lib/accounts/resolveSender.js](../lib/accounts/resolveSender.js):
+    - `OWNER_PHONE_NUMBER` always reads/writes local disk.
+    - A number linked to an active account with a stored refresh token gets its own stores, built fresh per request against its linked Google Drive folder.
+    - Any other number gets a reply with a claim link (the same link is reused until it's claimed or expires) and nothing is saved.
+  - Note: See [routes/webhook.js](../routes/webhook.js) for the message-parsing rules once a sender is resolved.
 
 - GET/POST /api/*
-  - Note: Additional API actions are implemented in [routes/api.js](routes/api.js). Use that file for details.
+  - Description: Dashboard API, gated by `DASHBOARD_PASSWORD`. Always reads/writes the owner's local storage — there is no multi-tenant dashboard.
+  - Note: See [routes/api.js](../routes/api.js) for the full endpoint list.
 
 **Storage providers**
-- The app uses a pluggable storage abstraction in `lib/storage`.
-  - Local: `lib/storage/LocalFileStorageProvider.js` (default)
-  - Google Drive: `lib/storage/GoogleDriveProvider.js` (per-account Drive folder)
+- The app uses a pluggable async storage abstraction in `lib/storage` (`readFile`/`writeFile`/`listFiles`/`deleteFile`/`ensureDataDir`, see `lib/storage/StorageProvider.js`).
+  - Local: `lib/storage/LocalFileStorageProvider.js` — used once, for the owner.
+  - Google Drive: `lib/storage/GoogleDriveProvider.js` — one instance per linked account, scoped to that account's Drive folder (`provider_folder_id`). Files are plain-text (not native Google Docs).
+- `lib/notes.js`, `lib/tags.js`, `lib/goals.js`, `lib/busy.js`, `lib/done.js` are factories (`createXStore(storageProvider)`) rather than singletons, so a fresh set of stores can be built per account. `lib/stores.js`'s `buildStores(storageProvider)` builds the full `{ notes, tags, goals, busy, done }` bundle.
 
 **Database schema**
 - `user_accounts` table (managed by `lib/accounts/UserAccountRepository.js`)
-  - id, phone_hash, google_refresh_token (stored in `encrypted_refresh_token` column in db), created_at, updated_at
+  - id, phone_number_hash, storage_provider, encrypted_refresh_token, provider_folder_id, claimed_at, last_active_at, status
 - `claim_tokens` table
-  - token, account_id, phone_hash, expires_at
+  - token, phone_number_hash, expires_at
 
 **Environment variables**
-- `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` — required for Google OAuth
-- `PUBLIC_URL` — base URL used for OAuth redirect URIs
-- `DATA_DIR` — local storage directory for `LocalFileStorageProvider`
+- `OWNER_PHONE_NUMBER` — the number that keeps using local disk; required in production
+- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — required for Google OAuth (anyone other than the owner claiming an account)
+- `ACCOUNT_HASH_SECRET` — HMAC key phone numbers are hashed with before storage
+- `TOKEN_ENCRYPTION_KEY` — AES-256 key (base64, 32 bytes) refresh tokens are encrypted with at rest
+- `PUBLIC_URL` — base URL used for OAuth redirect URIs and claim links
+- `DATA_DIR` — local storage directory for `LocalFileStorageProvider` (owner only)
 - `ACCOUNTS_DB` — path to SQLite DB file (default `./data/accounts.db`)
 - `DASHBOARD_PASSWORD` — simple password guard for the admin dashboard
 
@@ -57,10 +65,5 @@ This document describes the HTTP endpoints, OAuth claim flow, and environment va
 - Run unit tests with:
 
   npm test
-
-**Next steps / TODO**
-- Add encrypted storage for refresh tokens (server-side KMS or environment secret).
-- Harden OAuth callback handling when Google omits `refresh_token` (re-prompt or surface UI instructions).
-- Add per-account folder lookup/creation resilience and pagination handling for Drive API calls.
 
 For implementation details, see the source files referenced above.
