@@ -58,12 +58,13 @@ const ownerStores = buildStores(storageProvider);
 const plan = createPlanModule(ownerStores);
 const UserAccountRepository = require('./lib/accounts/UserAccountRepository');
 const accountRepo = new UserAccountRepository();
-app.use('/claim', createClaimRouter(accountRepo));
 startBackups();
 plan.startPlanScheduler();
 
 app.use(bodyParser.urlencoded({ extended: false })); // Twilio posts form-encoded
 app.use(bodyParser.json());
+
+app.use('/claim', createClaimRouter(accountRepo));
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 
