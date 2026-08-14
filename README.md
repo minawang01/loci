@@ -338,18 +338,6 @@ curl https://<app-name>.fly.dev/health   # {"ok":true}
 `min_machines_running = 1` (no cold starts for Twilio), and mounts the
 `loci_data` volume at `/data`.
 
-### Custom domain under minawang.com
-
-```bash
-fly certs add loci.minawang.com    # prints the DNS records to create
-# add the CNAME/A+AAAA records at your DNS provider, then:
-fly certs show loci.minawang.com
-fly secrets set PUBLIC_URL=https://loci.minawang.com
-```
-
-Update the webhook URL in the Twilio Console to match, or signature validation
-will reject inbound messages.
-
 ### Redeploying after a change
 
 ```bash
