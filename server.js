@@ -84,6 +84,14 @@ for (const page of ['privacy', 'terms']) {
   );
 }
 
+// The claim page is how someone who has never touched the dashboard links
+// their own Google account, so it has to be reachable without a dashboard
+// session — gating it behind requireAuth would make the claim link useless
+// to anyone but the owner.
+app.get('/claim.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'claim.html'));
+});
+
 // The login page is the only other thing served before the gate, so an
 // unauthenticated visitor never sees any part of the dashboard.
 app.get('/login', (req, res) => {

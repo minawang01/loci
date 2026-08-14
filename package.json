@@ -11,14 +11,14 @@
     "test": "mocha"
   },
   "dependencies": {
+    "better-sqlite3": "^12.11.1",
     "body-parser": "^1.20.2",
     "chrono-node": "^2.10.1",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "express-rate-limit": "8.6.0",
-    "twilio": "^5.2.2",
-    "better-sqlite3": "^8.2.0",
-    "googleapis": "^121.0.0"
+    "googleapis": "^121.0.0",
+    "twilio": "^5.2.2"
   },
   "devDependencies": {
     "mocha": "^10.2.0"

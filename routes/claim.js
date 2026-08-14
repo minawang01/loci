@@ -20,7 +20,7 @@ function createClaimRouter(userRepo) {
     const token = crypto.randomBytes(18).toString('hex');
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1h
     repo.createClaimToken(token, phoneHash, expiresAt);
-    const url = `${(process.env.PUBLIC_URL || '')}/claim?token=${token}`;
+    const url = `${(process.env.PUBLIC_URL || '')}/claim.html?token=${token}`;
     res.json({ ok: true, token, url, expires_at: expiresAt });
   });
 
@@ -90,19 +90,26 @@ function createClaimRouter(userRepo) {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
     const publicUrl = process.env.PUBLIC_URL || '';
+    // Genuine server misconfiguration — an operator issue, not a user-facing
+    // one, so this stays a plain response rather than the branded claim page.
     if (!clientId || !clientSecret) return res.status(500).send('OAuth not configured');
     if (!process.env.TOKEN_ENCRYPTION_KEY) return res.status(500).send('Token encryption not configured');
-    if (!code) return res.status(400).send('Missing code');
+
+    // Everything past this point is reachable by a real person mid-flow, so
+    // failures redirect back to the claim page's own error state rather than
+    // showing a bare text response.
+    const toClaimError = reason => res.redirect(`${publicUrl.replace(/\/$/, '')}/claim.html?error=${reason}`);
+    if (!code) return toClaimError('missing_code');
     const redirectUri = `${publicUrl.replace(/\/$/, '')}/claim/google/callback`;
     const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
     try {
       const { tokens } = await oauth2Client.getToken(code);
       const refreshToken = tokens.refresh_token || null;
       // Find claim token record
-      if (!token) return res.status(400).send('Missing state token');
+      if (!token) return toClaimError('missing_token');
       const record = repo.findClaimToken(token);
-      if (!record) return res.status(404).send('Claim token not found');
-      if (new Date(record.expires_at) < new Date()) return res.status(410).send('token expired');
+      if (!record) return toClaimError('not_found');
+      if (new Date(record.expires_at) < new Date()) return toClaimError('expired');
 
       const encryptedRefreshToken = refreshToken ? encryptToken(refreshToken) : null;
 
@@ -127,11 +134,10 @@ function createClaimRouter(userRepo) {
         });
       }
       repo.deleteClaimToken(token);
-      // Redirect to a simple success page or claim UI
-      res.redirect((process.env.PUBLIC_URL || '') + '/claim.html?done=1');
+      res.redirect(`${publicUrl.replace(/\/$/, '')}/claim.html?done=1`);
     } catch (err) {
       console.error('OAuth callback error', err);
-      res.status(502).send('OAuth exchange failed');
+      toClaimError('exchange_failed');
     }
   });
 

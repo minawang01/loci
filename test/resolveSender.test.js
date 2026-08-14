@@ -42,7 +42,7 @@ describe('resolveSender', function() {
 
     const first = await resolveSender({ fromNumber: from, accountRepo: repo, ownerStores, ownerPhone, publicUrl: 'https://loci.example.com' });
     assert.strictEqual(first.kind, 'unclaimed');
-    assert.ok(first.claimUrl.startsWith('https://loci.example.com/claim?token='));
+    assert.ok(first.claimUrl.startsWith('https://loci.example.com/claim.html?token='));
 
     const second = await resolveSender({ fromNumber: from, accountRepo: repo, ownerStores, ownerPhone, publicUrl: 'https://loci.example.com' });
     assert.strictEqual(second.claimUrl, first.claimUrl);

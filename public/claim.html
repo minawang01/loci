@@ -1,23 +1,191 @@
-<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <title>Loci - Claim</title>
-  </head>
-  <body>
-    <h1>Claim your Loci number</h1>
-    <p id="status">Preparing...</p>
-    <button id="proceed">Continue to connect account</button>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Connect your account — loci</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,300;0,400;0,500;1,400;1,500&display=swap" rel="stylesheet">
+<!-- Styles are inlined, same as the login page: this is a public page reached
+     by anyone who has never touched the dashboard, so it can't depend on
+     /style.css sitting behind the auth gate. -->
+<style>
+  :root {
+    --bg: #FAF9F9;
+    --ink: oklch(0.08 0 0);
+    --border: oklch(0.85 0 0);
+    --muted: oklch(0.4 0 0);
+    --serif: "Newsreader", Georgia, serif;
+  }
 
-    <script>
-      const params = new URLSearchParams(location.search);
-      const token = params.get('token');
-      document.getElementById('status').textContent = token ? `Token: ${token}` : 'No token supplied';
-        document.getElementById('proceed').addEventListener('click', async () => {
-          if (!token) return alert('No token');
-          // Redirect to the OAuth start endpoint with state=token
-          location.href = `/claim/google/start?token=${encodeURIComponent(token)}`;
-        });
-    </script>
-  </body>
- </html>
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: var(--bg);
+    font-family: var(--serif);
+    color: var(--ink);
+  }
+
+  .texture {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.35;
+    background-image: repeating-linear-gradient(
+      45deg,
+      transparent 0 6px,
+      oklch(0.9 0.004 90) 6px 7px
+    );
+  }
+
+  .claim {
+    position: relative;
+    width: 100%;
+    max-width: 340px;
+  }
+
+  .wordmark {
+    font-size: 30px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    margin-bottom: 8px;
+  }
+
+  .tagline {
+    font-size: 14px;
+    font-style: italic;
+    color: var(--muted);
+    margin: 0 0 32px;
+    line-height: 1.5;
+  }
+
+  p.body-text {
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--ink);
+    margin: 0 0 28px;
+  }
+
+  button.primary {
+    width: 100%;
+    font-family: var(--serif);
+    font-size: 14px;
+    letter-spacing: 0.02em;
+    color: var(--bg);
+    background: var(--ink);
+    border: 1px solid var(--ink);
+    border-radius: 3px;
+    padding: 12px;
+    cursor: pointer;
+  }
+  button.primary:hover { opacity: 0.85; }
+  button.primary:disabled { opacity: 0.5; cursor: default; }
+
+  .fineprint {
+    font-size: 12.5px;
+    font-style: italic;
+    color: var(--muted);
+    line-height: 1.5;
+    margin: 16px 0 0;
+  }
+
+  .state { display: flex; flex-direction: column; }
+  .state[hidden] { display: none; }
+
+  .badge {
+    font-size: 22px;
+    line-height: 1;
+    margin-bottom: 14px;
+  }
+
+  /* The app's one accent color, reserved for error/danger states — same red
+     used by login.html's .error text and style.css's delete-hover states. */
+  .error-message {
+    font-size: 15px;
+    font-style: italic;
+    line-height: 1.6;
+    color: oklch(0.5 0.16 25);
+    margin: 0 0 28px;
+  }
+</style>
+</head>
+<body>
+  <div class="texture" aria-hidden="true"></div>
+
+  <main class="claim">
+    <div class="wordmark">loci</div>
+
+    <!-- Default: a token is present and unexpired-looking; offer to connect. -->
+    <div class="state" id="connectState" hidden>
+      <p class="tagline">Save texts to your own Google Drive.</p>
+      <p class="body-text">
+        Texts to this number aren't stored on our servers — they're saved straight
+        to a private folder in your Google Drive. Connect your account to start.
+      </p>
+      <button class="primary" id="connect" type="button">Connect Google Drive</button>
+      <p class="fineprint">You'll be asked to sign in to Google and approve access to a single app-created folder.</p>
+    </div>
+
+    <!-- After the OAuth callback redirects back here with ?done=1. -->
+    <div class="state" id="doneState" hidden>
+      <div class="badge">✓</div>
+      <p class="tagline">Connected.</p>
+      <p class="body-text">
+        Texts to this number now save straight to your Google Drive. You can close this tab.
+      </p>
+    </div>
+
+    <!-- No token in the URL, or the OAuth callback redirected back with a
+         reason — either way there's nothing to retry in place. -->
+    <div class="state" id="errorState" hidden>
+      <p class="tagline">This link isn't valid.</p>
+      <p class="error-message" id="errorMessage">Text this number again to get a new link.</p>
+    </div>
+  </main>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const token = params.get('token');
+    const done = params.get('done') === '1';
+    const error = params.get('error');
+
+    const connectState = document.getElementById('connectState');
+    const doneState = document.getElementById('doneState');
+    const errorState = document.getElementById('errorState');
+    const errorMessage = document.getElementById('errorMessage');
+
+    // Every reason funnels to the same "get a new link" instruction — a
+    // stale or already-used token can't be retried in place from here, so
+    // the safe answer is always to text the number again rather than guess
+    // which failures are worth an in-page "try again" button.
+    const ERROR_MESSAGES = {
+      expired: 'That link expired — text this number again to get a new one.',
+      not_found: "That link isn't valid anymore — text this number again to get a new one.",
+      missing_token: 'That link is missing its token — text this number again to get a new one.',
+      missing_code: 'Google did not return an authorization code — text this number again to get a new link.',
+      exchange_failed: 'Could not finish connecting to Google — text this number again to get a new link.'
+    };
+
+    if (done) {
+      doneState.hidden = false;
+    } else if (error) {
+      errorState.hidden = false;
+      errorMessage.textContent = ERROR_MESSAGES[error] || 'Something went wrong — text this number again to get a new link.';
+    } else if (!token) {
+      errorState.hidden = false;
+    } else {
+      connectState.hidden = false;
+      document.getElementById('connect').addEventListener('click', () => {
+        location.href = `/claim/google/start?token=${encodeURIComponent(token)}`;
+      });
+    }
+  </script>
+</body>
+</html>

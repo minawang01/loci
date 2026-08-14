@@ -4,8 +4,11 @@ ENV NODE_ENV=production
 WORKDIR /app
 
 # rclone mirrors the data directory to cloud storage; see lib/backup.js.
+# python3/make/g++ are build-only: better-sqlite3 has no prebuilt binary for
+# every Node version/arch combo, so npm falls back to compiling it from
+# source via node-gyp, which needs all three.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends rclone ca-certificates \
+  && apt-get install -y --no-install-recommends rclone ca-certificates python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./
