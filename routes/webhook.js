@@ -19,6 +19,14 @@ function twiml(message) {
   return response.toString();
 }
 
+const HELP_TEXT =
+  'loci commands — text anything to save it as a note. ' +
+  '#todo <item> adds to today\'s list, #done <what you finished> crosses it off. ' +
+  '#busy 9am-5pm work (or #busy 3pm for 2 hrs) blocks time. ' +
+  '#goals <goal> tracks a goal, with "- subtask" lines under it. ' +
+  '#create list <name> then items on new lines makes a list; "item #listname" adds to one. ' +
+  'Text #help anytime to see this again.';
+
 // Validates that the request really came from Twilio. Validation is mandatory
 // when NODE_ENV=production; outside production it can be skipped so local
 // testing works without Twilio credentials.
@@ -49,6 +57,12 @@ function validateTwilioRequest(req, res, next) {
 // the route handler so the routing/error-handling above stays easy to read.
 async function handleMessage({ res, body, notes, tags, goals, busy, done }) {
   const lower = body.toLowerCase();
+
+  // 0. "#help" always short-circuits with instructions, checked first so it
+  // can't be swallowed by any of the tag-detection rules below.
+  if (/^#help\b/i.test(body)) {
+    return res.type('text/xml').send(twiml(HELP_TEXT));
+  }
 
   // 1. "#goals <title>" with optional "- subtask" lines. Checked before the
   // list and todo rules so a message carrying several tags becomes a goal.

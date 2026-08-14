@@ -45,7 +45,9 @@ body {
   align-items: baseline;
   justify-content: space-between;
   margin-bottom: 34px;
+  transition: margin-bottom 0.22s ease;
 }
+.topbar.menu-open { margin-bottom: 6px; }
 
 .wordmark {
   font-size: 24px;
@@ -53,16 +55,127 @@ body {
   letter-spacing: 0.01em;
 }
 
-.logout {
+/* -- top-right menu -- */
+
+.menu-trigger {
   font-family: var(--serif);
-  font-size: 12.5px;
+  font-size: 15px;
+  line-height: 1;
   color: var(--muted);
   background: transparent;
   border: none;
   padding: 0;
   cursor: pointer;
+  transform: rotate(0deg);
+  transition: transform 0.2s ease, color 0.15s ease;
 }
-.logout:hover { color: var(--ink); }
+.menu-trigger:hover { color: var(--ink); }
+.menu-trigger.open { color: var(--ink); transform: rotate(-90deg); }
+
+.menu-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.22s ease, margin-bottom 0.22s ease;
+}
+.menu-panel.open {
+  max-height: 90px;
+  margin-bottom: 24px;
+}
+
+.menu-item {
+  font-family: var(--serif);
+  font-size: 12.5px;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  padding: 4px 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.menu-item:hover { color: var(--ink); text-decoration: underline; }
+
+/* -- info panel -- */
+
+.info-overlay[hidden] { display: none; }
+
+.info-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 90px 24px 24px;
+  background: oklch(0.08 0 0 / 0.35);
+}
+
+.info-panel {
+  width: 100%;
+  max-width: 460px;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 24px 28px 28px;
+}
+
+.info-bar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.info-title {
+  font-size: 17px;
+  font-weight: 500;
+}
+
+.info-close {
+  font-family: var(--serif);
+  font-size: 20px;
+  line-height: 1;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  padding: 0 2px;
+  cursor: pointer;
+}
+.info-close:hover { color: var(--ink); }
+
+.info-text {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink);
+  margin: 0 0 20px;
+}
+
+.info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0;
+}
+
+.info-list dt {
+  font-size: 13.5px;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.info-list dd {
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.5;
+  color: var(--muted);
+  margin: 0;
+}
 
 /* -- layout -- */
 

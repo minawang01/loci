@@ -4,9 +4,12 @@ const { google } = require('googleapis');
 const { normalizePhone, hashPhone } = require('../lib/phone');
 const { encryptToken } = require('../lib/tokenCrypto');
 
-// Factory to allow injecting a repo for tests
-function createClaimRouter(userRepo) {
+// Factory to allow injecting a repo (and, for tests, a stub OAuth2 client) —
+// real usage always omits `createOAuth2Client` and gets the googleapis one.
+function createClaimRouter(userRepo, createOAuth2Client) {
   const repo = userRepo;
+  const buildOAuth2Client = createOAuth2Client
+    || ((clientId, clientSecret, redirectUri) => new google.auth.OAuth2(clientId, clientSecret, redirectUri));
   const router = express.Router();
 
   // Request a claim token for a phone number. The number itself is never
@@ -20,7 +23,7 @@ function createClaimRouter(userRepo) {
     const token = crypto.randomBytes(18).toString('hex');
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1h
     repo.createClaimToken(token, phoneHash, expiresAt);
-    const url = `${(process.env.PUBLIC_URL || '')}/claim.html?token=${token}`;
+    const url = `${(process.env.PUBLIC_URL || '').replace(/\/$/, '')}/claim.html?token=${token}`;
     res.json({ ok: true, token, url, expires_at: expiresAt });
   });
 
@@ -74,7 +77,7 @@ function createClaimRouter(userRepo) {
     const publicUrl = process.env.PUBLIC_URL || '';
     if (!clientId || !clientSecret) return res.status(500).send('OAuth not configured');
     const redirectUri = `${publicUrl.replace(/\/$/, '')}/claim/google/callback`;
-    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+    const oauth2Client = buildOAuth2Client(clientId, clientSecret, redirectUri);
     const url = oauth2Client.generateAuthUrl({
       access_type: 'offline',
       prompt: 'consent',
@@ -101,7 +104,7 @@ function createClaimRouter(userRepo) {
     const toClaimError = reason => res.redirect(`${publicUrl.replace(/\/$/, '')}/claim.html?error=${reason}`);
     if (!code) return toClaimError('missing_code');
     const redirectUri = `${publicUrl.replace(/\/$/, '')}/claim/google/callback`;
-    const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+    const oauth2Client = buildOAuth2Client(clientId, clientSecret, redirectUri);
     try {
       const { tokens } = await oauth2Client.getToken(code);
       const refreshToken = tokens.refresh_token || null;

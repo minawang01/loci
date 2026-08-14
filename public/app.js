@@ -18,6 +18,12 @@ const detailTags = document.getElementById('detailTags');
 const backButton = document.getElementById('back');
 const detailDelete = document.getElementById('detailDelete');
 const logoutButton = document.getElementById('logout');
+const infoButton = document.getElementById('info');
+const infoOverlay = document.getElementById('infoOverlay');
+const infoClose = document.getElementById('infoClose');
+const menuTrigger = document.getElementById('menuTrigger');
+const menuPanel = document.getElementById('menuPanel');
+const topbarEl = document.querySelector('.topbar');
 const searchInput = document.getElementById('search');
 const tagFilterEl = document.getElementById('tagFilter');
 const planEl = document.getElementById('plan');
@@ -595,9 +601,53 @@ tomorrow.setDate(tomorrow.getDate() + 1);
 planDateInput.value = localDay(tomorrow);
 planDateInput.min = localDay(new Date());
 
+function openMenu() {
+  menuTrigger.classList.add('open');
+  menuPanel.classList.add('open');
+  topbarEl.classList.add('menu-open');
+  menuTrigger.setAttribute('aria-expanded', 'true');
+}
+
+function closeMenu() {
+  menuTrigger.classList.remove('open');
+  menuPanel.classList.remove('open');
+  topbarEl.classList.remove('menu-open');
+  menuTrigger.setAttribute('aria-expanded', 'false');
+}
+
+menuTrigger.addEventListener('click', () => {
+  if (menuPanel.classList.contains('open')) closeMenu();
+  else openMenu();
+});
+document.addEventListener('click', e => {
+  if (menuPanel.classList.contains('open') && !menuPanel.contains(e.target) && e.target !== menuTrigger) closeMenu();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && menuPanel.classList.contains('open')) closeMenu();
+});
+
 logoutButton.addEventListener('click', async () => {
+  closeMenu();
   await fetch('/logout', { method: 'POST' });
   window.location.replace('/login');
+});
+
+function openInfo() {
+  closeMenu();
+  infoOverlay.hidden = false;
+}
+
+function closeInfo() {
+  infoOverlay.hidden = true;
+}
+
+infoButton.addEventListener('click', openInfo);
+infoClose.addEventListener('click', closeInfo);
+infoOverlay.addEventListener('click', e => {
+  if (e.target === infoOverlay) closeInfo();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !infoOverlay.hidden) closeInfo();
 });
 
 tagFilterEl.addEventListener('click', e => {

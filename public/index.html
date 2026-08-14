@@ -15,8 +15,13 @@
   <div class="app">
     <header class="topbar">
       <div class="wordmark">loci</div>
-      <button class="logout" id="logout" type="button">Sign out</button>
+      <button class="menu-trigger" id="menuTrigger" type="button" aria-expanded="false" aria-controls="menuPanel" aria-label="Menu">&lt;</button>
     </header>
+
+    <div class="menu-panel" id="menuPanel">
+      <button class="menu-item" id="info" type="button">How to use loci</button>
+      <button class="menu-item" id="logout" type="button">Sign out</button>
+    </div>
 
     <div class="layout" id="layout">
       <section class="feed" id="feed">
@@ -84,6 +89,25 @@
       <div class="detail-items" id="detailItems"></div>
       <div class="detail-tags" id="detailTags"></div>
     </section>
+  </div>
+
+  <div class="info-overlay" id="infoOverlay" hidden>
+    <div class="info-panel" role="dialog" aria-modal="true" aria-labelledby="infoTitle">
+      <div class="info-bar">
+        <span class="info-title" id="infoTitle">How to use loci</span>
+        <button class="info-close" id="infoClose" type="button" aria-label="Close">×</button>
+      </div>
+      <p class="info-text">Text your loci number to save a note, or write one below. Anything you send is saved as-is; a few tags turn a text into something more specific:</p>
+      <dl class="info-list">
+        <div><dt>#todo &lt;item&gt;</dt><dd>Adds to today's list.</dd></div>
+        <div><dt>#done &lt;what you finished&gt;</dt><dd>Crosses an item off today's list.</dd></div>
+        <div><dt>#busy 9am-5pm work</dt><dd>Blocks time on the calendar — or "#busy 3pm for 2 hrs".</dd></div>
+        <div><dt>#goals &lt;goal&gt;</dt><dd>Tracks a goal; add "- subtask" lines under it.</dd></div>
+        <div><dt>#create list &lt;name&gt;</dt><dd>Makes a list from the lines that follow.</dd></div>
+        <div><dt>item #listname</dt><dd>Adds to an existing list.</dd></div>
+        <div><dt>#help</dt><dd>Texts these instructions back to you.</dd></div>
+      </dl>
+    </div>
   </div>
 
   <p class="composer-notice" id="composerNotice" hidden></p>
