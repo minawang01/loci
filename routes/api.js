@@ -1,11 +1,18 @@
 const express = require('express');
 
-function createApiRouter(stores, { plan, sms }) {
-  const { notes, tags, goals, busy, done } = stores;
+// Every handler reads its stores off the request rather than closing over one
+// bundle: which storage a request touches depends on who is signed in (see
+// lib/accounts/resolveDashboardStores.js, which sets `req.stores`/`req.plan`).
+function createApiRouter({ sms }) {
   const router = express.Router();
+
+  // Lets the dashboard tell an owner session from an account one; the
+  // send-a-plan-by-text action only exists for the owner.
+  router.get('/whoami', (req, res) => res.json(req.lociIdentity || { role: 'owner' }));
 
   // -- Notes --
   router.get('/notes', async (req, res) => {
+    const { notes } = req.stores;
     const { q, tag } = req.query;
     let result = (await notes.parseEntries()).reverse(); // newest first
     if (q) result = (await notes.searchNotes(q)).reverse();
@@ -14,6 +21,7 @@ function createApiRouter(stores, { plan, sms }) {
   });
 
   router.post('/notes', async (req, res) => {
+    const { notes, tags, goals, busy, done } = req.stores;
     const { text, tags: manualTags = [] } = req.body;
     if (!text || !text.trim()) return res.status(400).json({ error: 'text is required' });
 
@@ -50,6 +58,7 @@ function createApiRouter(stores, { plan, sms }) {
   });
 
   router.delete('/notes/:id', async (req, res) => {
+    const { notes } = req.stores;
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id < 0) return res.status(400).json({ error: 'invalid note id' });
     const deleted = await notes.deleteEntry(id, req.query.dateTime);
@@ -60,6 +69,7 @@ function createApiRouter(stores, { plan, sms }) {
   // Ticking a checkbox off a list. `itemIndex` counts checkbox lines within the
   // entry, matching the order the dashboard renders them.
   router.patch('/notes/:id/items/:itemIndex', async (req, res) => {
+    const { notes } = req.stores;
     const id = Number(req.params.id);
     const itemIndex = Number(req.params.itemIndex);
     const { done: isDone } = req.body || {};
@@ -77,10 +87,12 @@ function createApiRouter(stores, { plan, sms }) {
   });
 
   router.get('/todos/today', async (req, res) => {
+    const { notes } = req.stores;
     res.json({ name: notes.dailyTodoName(), entry: await notes.dailyTodo() });
   });
 
   router.post('/lists', async (req, res) => {
+    const { notes } = req.stores;
     const { name, items = [], tags: manualTags = [] } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required' });
     await notes.createList(name, items, manualTags.length ? manualTags : [name]);
@@ -88,6 +100,7 @@ function createApiRouter(stores, { plan, sms }) {
   });
 
   router.post('/lists/:tag/items', async (req, res) => {
+    const { notes } = req.stores;
     const { item } = req.body;
     if (!item) return res.status(400).json({ error: 'item is required' });
     const added = await notes.addItemToList(req.params.tag, item);
@@ -96,9 +109,10 @@ function createApiRouter(stores, { plan, sms }) {
   });
 
   // -- Goals --
-  router.get('/goals', async (req, res) => res.json(await goals.loadGoals()));
+  router.get('/goals', async (req, res) => res.json(await req.stores.goals.loadGoals()));
 
   router.post('/goals', async (req, res) => {
+    const { goals } = req.stores;
     const { text } = req.body;
     if (!text || !text.trim()) return res.status(400).json({ error: 'text is required' });
     const { goal, merged, ambiguous } = await goals.createGoal(text.trim());
@@ -108,6 +122,7 @@ function createApiRouter(stores, { plan, sms }) {
   // One endpoint for three edits, since the dashboard sends whichever the user
   // touched: a bare `{}` still flips status, preserving the original behaviour.
   router.patch('/goals/:id', async (req, res) => {
+    const { goals } = req.stores;
     const { status, title, deadline } = req.body || {};
     if (status && status !== 'active' && status !== 'done') {
       return res.status(400).json({ error: 'status must be "active" or "done"' });
@@ -130,11 +145,13 @@ function createApiRouter(stores, { plan, sms }) {
   });
 
   router.delete('/goals/:id', async (req, res) => {
+    const { goals } = req.stores;
     if (!(await goals.deleteGoal(req.params.id))) return res.status(404).json({ error: 'goal not found' });
     res.json({ ok: true });
   });
 
   router.patch('/goals/:id/subtasks/:subtaskId', async (req, res) => {
+    const { goals } = req.stores;
     const { done: isDone } = req.body || {};
     if (isDone !== undefined && typeof isDone !== 'boolean') {
       return res.status(400).json({ error: 'done must be a boolean' });
@@ -150,6 +167,7 @@ function createApiRouter(stores, { plan, sms }) {
   const MAX_BUSY_DAYS = 60;
 
   router.get('/busy', async (req, res) => {
+    const { notes, busy } = req.stores;
     const from = req.query.from || req.query.date || notes.today();
     const days = req.query.days === undefined ? 1 : Number(req.query.days);
 
@@ -172,6 +190,7 @@ function createApiRouter(stores, { plan, sms }) {
   });
 
   router.delete('/busy/:date/:id', async (req, res) => {
+    const { busy } = req.stores;
     if (!(await busy.removeBlock(req.params.date, req.params.id))) {
       return res.status(404).json({ error: 'block not found' });
     }
@@ -183,6 +202,8 @@ function createApiRouter(stores, { plan, sms }) {
   // request: the dashboard shows the plan on screen, which works even while
   // outbound SMS is carrier-blocked.
   router.post('/plan', async (req, res) => {
+    const { notes } = req.stores;
+    const plan = req.plan;
     // Any future day can be planned, not just tomorrow; omitting the date keeps
     // the nightly job's meaning.
     const { date } = req.body || {};
@@ -207,8 +228,11 @@ function createApiRouter(stores, { plan, sms }) {
       return res.status(502).json({ error: 'Could not generate a plan. Try again shortly.' });
     }
 
+    // Texting the plan is owner-only: a claimed account's phone number is only
+    // ever stored as a hash, so there is no number to send it to.
+    const isOwner = !req.lociIdentity || req.lociIdentity.role === 'owner';
     const body = { ...generated, sent: false };
-    if (req.body && req.body.send && sms.canSend(process.env.PLAN_PHONE_NUMBER)) {
+    if (req.body && req.body.send && isOwner && sms.canSend(process.env.PLAN_PHONE_NUMBER)) {
       try {
         await sms.sendMessage(process.env.PLAN_PHONE_NUMBER, generated.message);
         body.sent = true;
@@ -222,11 +246,11 @@ function createApiRouter(stores, { plan, sms }) {
   });
 
   // -- Tags --
-  router.get('/tags', async (req, res) => res.json(await tags.loadTags()));
+  router.get('/tags', async (req, res) => res.json(await req.stores.tags.loadTags()));
 
   router.post('/tags', async (req, res) => {
     try {
-      const created = await tags.addTag(req.body);
+      const created = await req.stores.tags.addTag(req.body);
       res.status(201).json(created);
     } catch (e) {
       res.status(400).json({ error: e.message });
@@ -235,7 +259,7 @@ function createApiRouter(stores, { plan, sms }) {
 
   router.patch('/tags/:name', async (req, res) => {
     try {
-      const updated = await tags.updateTag(req.params.name, req.body);
+      const updated = await req.stores.tags.updateTag(req.params.name, req.body);
       res.json(updated);
     } catch (e) {
       res.status(404).json({ error: e.message });

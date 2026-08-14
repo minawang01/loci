@@ -33,6 +33,7 @@ const planResult = document.getElementById('planResult');
 const composer = document.getElementById('composer');
 const composerInput = document.getElementById('composerInput');
 const composerNotice = document.getElementById('composerNotice');
+const sessionRoleEl = document.getElementById('sessionRole');
 
 let noticeTimer = null;
 
@@ -398,6 +399,16 @@ async function loadToday() {
   todayEmptyEl.hidden = items.length > 0;
 }
 
+// Which storage this session reads: the owner's own notes, or a claimed
+// account's own Google Drive. Worth saying out loud, since the two views are
+// otherwise identical.
+async function loadWhoami() {
+  const res = await api('/api/whoami');
+  const { role } = await res.json();
+  sessionRoleEl.textContent = role === 'owner' ? 'Signed in as owner' : 'Signed in as your account';
+  sessionRoleEl.hidden = false;
+}
+
 async function loadTags() {
   const res = await api('/api/tags');
   const tags = await res.json();
@@ -697,6 +708,7 @@ composer.addEventListener('submit', async e => {
   await loadNotes();
 });
 
+loadWhoami();
 loadTags();
 loadGoals();
 loadBusy();

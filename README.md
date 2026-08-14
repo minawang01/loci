@@ -242,7 +242,7 @@ All of these are documented in `.env.example`.
 | `BACKUP_INTERVAL_MINUTES` | no | defaults to 15 |
 | `RCLONE_CONFIG_DRIVE_*` | for backups | rclone remote config, including the OAuth token |
 | `TWILIO_VERIFY_SERVICE_SID` | for phone sign-in | Verify service that sends the login code |
-| `LOGIN_PHONE_NUMBERS` | for phone sign-in | comma-separated E.164 numbers allowed to sign in |
+| `LOGIN_PHONE_NUMBERS` | no | comma-separated E.164 numbers that sign in to the owner's dashboard without having claimed anything; the owner and every claimed account can already sign in |
 | `ANTHROPIC_API_KEY` | for the nightly plan | Claude API key |
 | `PLAN_PHONE_NUMBER` | for the nightly plan | where the plan is texted; prefix `whatsapp:` to send over WhatsApp |
 | `PLAN_SEND_TIME` | no | 24h host-local time, defaults to `21:30` |
@@ -277,25 +277,38 @@ cookie is the only thing that counts.
 
 ### Signing in with a phone number
 
-The login page offers "Text me a code" when both `TWILIO_VERIFY_SERVICE_SID` and
-`LOGIN_PHONE_NUMBERS` are set; otherwise it is the password form alone. The code
-is sent through [Twilio Verify](https://www.twilio.com/docs/verify), which uses
+The login page offers "Text me a code" when `TWILIO_VERIFY_SERVICE_SID` is set;
+otherwise it is the password form alone. The code is sent through [Twilio Verify](https://www.twilio.com/docs/verify), which uses
 Twilio's own registered senders rather than `TWILIO_SMS_NUMBER` — so it is
 delivered even though outbound SMS from the loci number is blocked pending A2P
 10DLC registration. Each verification costs about $0.05.
 
-Create the service once (Console → Verify → Services, or via the API) and set
-both variables:
+Create the service once (Console → Verify → Services, or via the API) and set it:
 
 ```bash
-fly secrets set TWILIO_VERIFY_SERVICE_SID=VAxxxx LOGIN_PHONE_NUMBERS='+15551234567' --app loci-notes
+fly secrets set TWILIO_VERIFY_SERVICE_SID=VAxxxx --app loci-notes
 ```
 
-Only listed numbers can sign in. A number that isn't listed gets the same
-"a code is on its way" response and no text, so the page never reveals who is
-allowed in. Requests are capped at 5 codes and 10 attempts per 15 minutes per
-IP, and a successful code sets exactly the same session cookie the password form
-does.
+Who can sign in is the union of three things: `OWNER_PHONE_NUMBER`, every number
+with an active claimed account (see below), and anything listed in the optional
+`LOGIN_PHONE_NUMBERS`. Any other number gets the same "a code is on its way"
+response and no text, so the page never reveals who is allowed in. Requests are
+capped at 5 codes and 10 attempts per 15 minutes per IP.
+
+The session cookie names who it belongs to, so signing in with a claimed
+account's number shows **that account's** notes, goals, busy blocks and tags —
+read from its own Google Drive folder, never the owner's disk. The owner number
+and `LOGIN_PHONE_NUMBERS` entries get the owner's dashboard, as they always did,
+and so do the scripted `x-dashboard-secret`/basic-auth paths, which have no
+phone number to identify an account by. Revoking an account (setting its
+`status` to anything but `active`) cuts its dashboard access on its next
+request. Texting a generated plan (`POST /api/plan` with `send: true`) stays
+owner-only: a claimed number is only ever stored as a hash, so there is no
+number to text it back to.
+
+The cookie format carries that identity, so any session issued before this
+existed no longer parses — everyone, owner included, signs in once more after
+the deploy that ships it.
 
 Clicking a checklist item — in the Today column, on a list card, or in the
 detail view — crosses it out and flips its `- [ ]` to `- [x]` in `notes.md`, so

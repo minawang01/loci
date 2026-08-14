@@ -14,6 +14,8 @@ const {
   clearSessionCookie
 } = require('./lib/auth');
 const otp = require('./lib/otp');
+const { resolveLoginIdentity } = require('./lib/accounts/resolveLogin');
+const { resolveDashboardStores } = require('./lib/accounts/resolveDashboardStores');
 const { DATA_DIR } = require('./lib/paths');
 const LocalFileStorageProvider = require('./lib/storage/LocalFileStorageProvider');
 const { buildStores } = require('./lib/stores');
@@ -130,13 +132,25 @@ const otpCheckLimiter = rateLimit({
   message: { error: 'Too many attempts. Try again in a few minutes.' }
 });
 
+// The dashboard is reachable by the owner, by any supplementary
+// LOGIN_PHONE_NUMBERS entry, and by every number with an active claimed
+// account — the last of which get their own scoped view.
+function loginIdentityFor(phone) {
+  return resolveLoginIdentity({
+    phone,
+    accountRepo,
+    ownerPhone: process.env.OWNER_PHONE_NUMBER,
+    loginPhoneNumbers: otp.allowedPhones()
+  });
+}
+
 app.post('/login/otp/start', otpStartLimiter, async (req, res) => {
   if (!otp.otpEnabled()) return res.status(404).json({ error: 'Phone sign-in is not configured' });
 
   const phone = otp.normalizePhone(req.body.phone);
-  // Always answer as if the code was sent: telling a stranger which numbers are
-  // on the allowlist would hand them half the credential.
-  if (!otp.isAllowed(phone)) return res.json({ ok: true });
+  // Always answer as if the code was sent: telling a stranger whether a number
+  // can sign in would hand them half the credential.
+  if (!loginIdentityFor(phone)) return res.json({ ok: true });
 
   try {
     await otp.sendCode(phone);
@@ -153,7 +167,10 @@ app.post('/login/otp/check', otpCheckLimiter, async (req, res) => {
   const phone = otp.normalizePhone(req.body.phone);
   const code = String(req.body.code || '').trim();
   const rejected = { error: 'That code is not valid' };
-  if (!otp.isAllowed(phone) || !/^\d{4,10}$/.test(code)) return res.status(401).json(rejected);
+  // Recomputed server-side from the number that just proved itself — nothing
+  // about which account this session gets comes from the client.
+  const identity = loginIdentityFor(phone);
+  if (!identity || !/^\d{4,10}$/.test(code)) return res.status(401).json(rejected);
 
   let approved = false;
   try {
@@ -164,7 +181,7 @@ app.post('/login/otp/check', otpCheckLimiter, async (req, res) => {
   }
   if (!approved) return res.status(401).json(rejected);
 
-  setSessionCookie(res, process.env.DASHBOARD_PASSWORD || '');
+  setSessionCookie(res, process.env.DASHBOARD_PASSWORD || '', identity);
   res.json({ ok: true });
 });
 
@@ -173,7 +190,12 @@ app.post('/logout', (req, res) => {
   res.json({ ok: true });
 });
 
-app.use('/api', requireAuth, createApiRouter(ownerStores, { plan, sms }));
+app.use(
+  '/api',
+  requireAuth,
+  resolveDashboardStores({ accountRepo, ownerStores, ownerPlan: plan }),
+  createApiRouter({ sms })
+);
 app.use(requireAuth, express.static(path.join(__dirname, 'public')));
 
 app.listen(PORT, () => {

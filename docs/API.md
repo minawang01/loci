@@ -28,8 +28,15 @@ This document describes the HTTP endpoints, OAuth claim flow, and environment va
   - Note: See [routes/webhook.js](../routes/webhook.js) for the message-parsing rules once a sender is resolved.
 
 - GET/POST /api/*
-  - Description: Dashboard API, gated by `DASHBOARD_PASSWORD`. Always reads/writes the owner's local storage — there is no multi-tenant dashboard.
+  - Description: Dashboard API, gated by `DASHBOARD_PASSWORD`. Which storage it reads/writes depends on the session: the owner (and the scripted `x-dashboard-secret`/basic-auth paths) get local disk, while a session signed in with a claimed account's number gets that account's own Drive-backed stores. [lib/accounts/resolveDashboardStores.js](../lib/accounts/resolveDashboardStores.js) re-checks the account on every request and sets `req.stores`/`req.plan` for the handlers.
   - Note: See [routes/api.js](../routes/api.js) for the full endpoint list.
+
+- GET /api/whoami
+  - Description: The identity behind the current session, so the dashboard can say which storage it is showing.
+  - Response: { "role": "owner" } or { "role": "account", "accountId": 3 }
+
+- POST /login/otp/start, POST /login/otp/check
+  - Description: Phone sign-in. A number may sign in if it is `OWNER_PHONE_NUMBER`, is listed in `LOGIN_PHONE_NUMBERS` (both of which get the owner's dashboard), or has an active claimed account (which gets its own scoped dashboard) — see [lib/accounts/resolveLogin.js](../lib/accounts/resolveLogin.js). Numbers that may not sign in get the same response and no text.
 
 **Storage providers**
 - The app uses a pluggable async storage abstraction in `lib/storage` (`readFile`/`writeFile`/`listFiles`/`deleteFile`/`ensureDataDir`, see `lib/storage/StorageProvider.js`).
