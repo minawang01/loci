@@ -69,6 +69,15 @@ async function api(path, options) {
     window.location.replace('/login');
     throw new Error('unauthenticated');
   }
+  // A session that has verified its number but not yet connected a Drive has
+  // nothing to read: it belongs on the onboarding page, not here.
+  if (res.status === 403) {
+    const body = await res.clone().json().catch(() => ({}));
+    if (body.onboarding) {
+      window.location.replace('/onboarding');
+      throw new Error('onboarding');
+    }
+  }
   return res;
 }
 

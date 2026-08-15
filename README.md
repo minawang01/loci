@@ -289,11 +289,46 @@ Create the service once (Console → Verify → Services, or via the API) and se
 fly secrets set TWILIO_VERIFY_SERVICE_SID=VAxxxx --app loci-notes
 ```
 
-Who can sign in is the union of three things: `OWNER_PHONE_NUMBER`, every number
-with an active claimed account (see below), and anything listed in the optional
-`LOGIN_PHONE_NUMBERS`. Any other number gets the same "a code is on its way"
-response and no text, so the page never reveals who is allowed in. Requests are
-capped at 5 codes and 10 attempts per 15 minutes per IP.
+Who can sign in without an invite is the union of three things:
+`OWNER_PHONE_NUMBER`, every number with a connected account (see below), and
+anything listed in the optional `LOGIN_PHONE_NUMBERS`. Any other number gets the
+same "a code is on its way" response and no text, so the page never reveals who
+is allowed in. Requests are capped at 5 codes and 10 attempts per 15 minutes per
+IP, and at 3 codes per 15 minutes per number — the IP cap alone lets one number
+be pestered from a rotation of addresses.
+
+### Signing up: invites and onboarding
+
+A number nobody has heard of signs up by presenting an invite, because every code
+sent costs money: no invite, no text. Mint one as the owner and hand it over
+however you like —
+
+```bash
+curl -X POST -u loci:'<password>' -H 'content-type: application/json' \
+  -d '{"note":"for sam"}' https://loci-notes.fly.dev/invites
+```
+
+— which answers with a code (`ABCD-2345`, good for 14 days) and a `url` that
+prefills it on the login page. An invite is single-use, and the first number to
+request a code against it owns it from then on, so a code that leaks can't be
+spent by someone else. It is only consumed once the code is entered correctly.
+
+Verifying the code creates a `pending` account and signs the person in, but a
+pending account has nowhere to keep notes yet: it holds a session that can reach
+`/onboarding` and nothing else. The dashboard redirects there and `/api` answers
+`403 {"onboarding": true}` until Drive is connected. `/onboarding` describes the
+app and connects Google Drive (`/onboarding/google/start`), and its callback
+stores the encrypted refresh token, flips the account to `active`, and hands over
+the number to text.
+
+> The Google OAuth client needs `$PUBLIC_URL/onboarding/google/callback` as an
+> authorized redirect URI, alongside the existing `/claim/google/callback`.
+
+The welcome text sent at that point is best effort — it goes out from
+`TWILIO_SMS_NUMBER`, which is still blocked pending A2P 10DLC registration, so a
+failure is logged and onboarding carries on. The same instructions, and the
+number itself, are on the page, which is the copy to rely on until registration
+clears.
 
 The session cookie names who it belongs to, so signing in with a claimed
 account's number shows **that account's** notes, goals, busy blocks and tags —
