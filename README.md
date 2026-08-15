@@ -242,7 +242,7 @@ All of these are documented in `.env.example`.
 | `BACKUP_INTERVAL_MINUTES` | no | defaults to 15 |
 | `RCLONE_CONFIG_DRIVE_*` | for backups | rclone remote config, including the OAuth token |
 | `TWILIO_VERIFY_SERVICE_SID` | for phone sign-in | Verify service that sends the login code |
-| `LOGIN_PHONE_NUMBERS` | for phone sign-in | comma-separated E.164 numbers allowed to sign in |
+| `LOGIN_PHONE_NUMBERS` | no | comma-separated E.164 numbers that sign in to the owner's dashboard without having claimed anything; the owner and every claimed account can already sign in |
 | `ANTHROPIC_API_KEY` | for the nightly plan | Claude API key |
 | `PLAN_PHONE_NUMBER` | for the nightly plan | where the plan is texted; prefix `whatsapp:` to send over WhatsApp |
 | `PLAN_SEND_TIME` | no | 24h host-local time, defaults to `21:30` |
@@ -277,25 +277,82 @@ cookie is the only thing that counts.
 
 ### Signing in with a phone number
 
-The login page offers "Text me a code" when both `TWILIO_VERIFY_SERVICE_SID` and
-`LOGIN_PHONE_NUMBERS` are set; otherwise it is the password form alone. The code
-is sent through [Twilio Verify](https://www.twilio.com/docs/verify), which uses
+The login page offers "Text me a code" when `TWILIO_VERIFY_SERVICE_SID` is set;
+otherwise it is the password form alone. The code is sent through [Twilio Verify](https://www.twilio.com/docs/verify), which uses
 Twilio's own registered senders rather than `TWILIO_SMS_NUMBER` — so it is
 delivered even though outbound SMS from the loci number is blocked pending A2P
 10DLC registration. Each verification costs about $0.05.
 
-Create the service once (Console → Verify → Services, or via the API) and set
-both variables:
+Create the service once (Console → Verify → Services, or via the API) and set it:
 
 ```bash
-fly secrets set TWILIO_VERIFY_SERVICE_SID=VAxxxx LOGIN_PHONE_NUMBERS='+15551234567' --app loci-notes
+fly secrets set TWILIO_VERIFY_SERVICE_SID=VAxxxx --app loci-notes
 ```
 
-Only listed numbers can sign in. A number that isn't listed gets the same
-"a code is on its way" response and no text, so the page never reveals who is
-allowed in. Requests are capped at 5 codes and 10 attempts per 15 minutes per
-IP, and a successful code sets exactly the same session cookie the password form
-does.
+Who can sign in without an invite is the union of three things:
+`OWNER_PHONE_NUMBER`, every number with a connected account (see below), and
+anything listed in the optional `LOGIN_PHONE_NUMBERS`. Any other number gets the
+same "a code is on its way" response and no text, so the page never reveals who
+is allowed in. Requests are capped at 5 codes and 10 attempts per 15 minutes per
+IP, and per number at 3 codes, 5 code guesses and 5 invite guesses per 15 minutes
+— the IP caps alone leave a single number open to being pestered, and its code or
+invite guessed, from a rotation of addresses.
+
+### Signing up: invites and onboarding
+
+A number nobody has heard of signs up by presenting an invite, because every code
+sent costs money: no invite, no text. Mint one as the owner and hand it over
+however you like —
+
+```bash
+curl -X POST -u loci:'<password>' -H 'content-type: application/json' \
+  -d '{"note":"for sam"}' https://loci-notes.fly.dev/invites
+```
+
+— which answers with a code (`ABCD-2345`, good for 14 days) and a `url` that
+prefills it on the login page. An invite is single-use, and the first number to
+request a code against it owns it from then on, so a code that leaks can't be
+spent by someone else. It is only consumed once the code is entered correctly.
+
+Verifying the code creates a `pending` account and signs the person in, but a
+pending account has nowhere to keep notes yet: it holds a session that can reach
+`/onboarding` and nothing else. The dashboard redirects there and `/api` answers
+`403 {"onboarding": true}` until Drive is connected. `/onboarding` describes the
+app and connects Google Drive (`/onboarding/google/start`), and its callback
+stores the encrypted refresh token, flips the account to `active`, and hands over
+the number to text.
+
+> The Google OAuth client needs `$PUBLIC_URL/onboarding/google/callback` as an
+> authorized redirect URI, alongside the existing `/claim/google/callback`.
+
+A claim link (`POST /claim/request`) activates an account with no code sent and
+none entered, which would be a way around the invite gate, so minting one is
+owner-only. It stays as the hatch for a number that cannot receive a code at all;
+the link itself, and the rest of `/claim/*`, is still open so the person you send
+it to needs no login. For the same reason an unrecognised number that texts the
+loci number is answered with the sign-up page rather than a claim link of its own,
+and nothing about it is written down.
+
+The welcome text sent at that point is best effort — it goes out from
+`TWILIO_SMS_NUMBER`, which is still blocked pending A2P 10DLC registration, so a
+failure is logged and onboarding carries on. The same instructions, and the
+number itself, are on the page, which is the copy to rely on until registration
+clears.
+
+The session cookie names who it belongs to, so signing in with a claimed
+account's number shows **that account's** notes, goals, busy blocks and tags —
+read from its own Google Drive folder, never the owner's disk. The owner number
+and `LOGIN_PHONE_NUMBERS` entries get the owner's dashboard, as they always did,
+and so do the scripted `x-dashboard-secret`/basic-auth paths, which have no
+phone number to identify an account by. Revoking an account (setting its
+`status` to anything but `active`) cuts its dashboard access on its next
+request. Texting a generated plan (`POST /api/plan` with `send: true`) stays
+owner-only: a claimed number is only ever stored as a hash, so there is no
+number to text it back to.
+
+The cookie format carries that identity, so any session issued before this
+existed no longer parses — everyone, owner included, signs in once more after
+the deploy that ships it.
 
 Clicking a checklist item — in the Today column, on a list card, or in the
 detail view — crosses it out and flips its `- [ ]` to `- [x]` in `notes.md`, so
@@ -337,18 +394,6 @@ curl https://<app-name>.fly.dev/health   # {"ok":true}
 `fly.toml` already sets `NODE_ENV=production`, `DATA_DIR=/data`,
 `min_machines_running = 1` (no cold starts for Twilio), and mounts the
 `loci_data` volume at `/data`.
-
-### Custom domain under minawang.com
-
-```bash
-fly certs add loci.minawang.com    # prints the DNS records to create
-# add the CNAME/A+AAAA records at your DNS provider, then:
-fly certs show loci.minawang.com
-fly secrets set PUBLIC_URL=https://loci.minawang.com
-```
-
-Update the webhook URL in the Twilio Console to match, or signature validation
-will reject inbound messages.
 
 ### Redeploying after a change
 

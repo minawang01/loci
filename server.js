@@ -1,19 +1,18 @@
 require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
-const rateLimit = require('express-rate-limit');
 const path = require('path');
 
 const createWebhookRouter = require('./routes/webhook');
 const createApiRouter = require('./routes/api');
-const {
-  requireAuth,
-  isAuthenticated,
-  credentialsMatch,
-  setSessionCookie,
-  clearSessionCookie
-} = require('./lib/auth');
+const createLoginRouter = require('./routes/login');
+const createOnboardingRouter = require('./routes/onboarding');
+const createInvitesRouter = require('./routes/invites');
+const { requireAuth, clearSessionCookie } = require('./lib/auth');
 const otp = require('./lib/otp');
+const { resolveDashboardStores } = require('./lib/accounts/resolveDashboardStores');
+const { onboardingGate } = require('./lib/accounts/onboardingGate');
+const { createVerifiedPhoneStore } = require('./lib/accounts/verifiedPhones');
 const { DATA_DIR } = require('./lib/paths');
 const LocalFileStorageProvider = require('./lib/storage/LocalFileStorageProvider');
 const { buildStores } = require('./lib/stores');
@@ -58,6 +57,7 @@ const ownerStores = buildStores(storageProvider);
 const plan = createPlanModule(ownerStores);
 const UserAccountRepository = require('./lib/accounts/UserAccountRepository');
 const accountRepo = new UserAccountRepository();
+const verifiedPhones = createVerifiedPhoneStore();
 startBackups();
 plan.startPlanScheduler();
 
@@ -92,89 +92,36 @@ app.get('/claim.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'claim.html'));
 });
 
-// The login page is the only other thing served before the gate, so an
+// Sign-in and invite-gated sign-up. Served before the gate, so an
 // unauthenticated visitor never sees any part of the dashboard.
-app.get('/login', (req, res) => {
-  if (isAuthenticated(req)) return res.redirect('/');
-  res.sendFile(path.join(__dirname, 'public', 'login.html'));
-});
-
-app.post('/login', (req, res) => {
-  const { username = '', password = '' } = req.body;
-  if (!credentialsMatch(username, password)) {
-    return res.status(401).json({ error: 'Incorrect username or password' });
-  }
-  setSessionCookie(res, password);
-  res.json({ ok: true });
-});
-
-// Lets the login page hide the phone tab on deployments without Verify
-// configured. Deliberately says nothing about which numbers are allowed.
-app.get('/login/options', (req, res) => res.json({ otp: otp.otpEnabled() }));
-
-// Each code costs money to send and is a chance to guess, so both halves of the
-// flow are capped well below anything a real person needs.
-const otpStartLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 5,
-  standardHeaders: 'draft-7',
-  legacyHeaders: false,
-  message: { error: 'Too many codes requested. Try again in a few minutes.' }
-});
-
-const otpCheckLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  limit: 10,
-  standardHeaders: 'draft-7',
-  legacyHeaders: false,
-  message: { error: 'Too many attempts. Try again in a few minutes.' }
-});
-
-app.post('/login/otp/start', otpStartLimiter, async (req, res) => {
-  if (!otp.otpEnabled()) return res.status(404).json({ error: 'Phone sign-in is not configured' });
-
-  const phone = otp.normalizePhone(req.body.phone);
-  // Always answer as if the code was sent: telling a stranger which numbers are
-  // on the allowlist would hand them half the credential.
-  if (!otp.isAllowed(phone)) return res.json({ ok: true });
-
-  try {
-    await otp.sendCode(phone);
-  } catch (err) {
-    console.error('Failed to send verification code:', err.message);
-    return res.status(502).json({ error: 'Could not send a code. Try again shortly.' });
-  }
-  res.json({ ok: true });
-});
-
-app.post('/login/otp/check', otpCheckLimiter, async (req, res) => {
-  if (!otp.otpEnabled()) return res.status(404).json({ error: 'Phone sign-in is not configured' });
-
-  const phone = otp.normalizePhone(req.body.phone);
-  const code = String(req.body.code || '').trim();
-  const rejected = { error: 'That code is not valid' };
-  if (!otp.isAllowed(phone) || !/^\d{4,10}$/.test(code)) return res.status(401).json(rejected);
-
-  let approved = false;
-  try {
-    approved = await otp.checkCode(phone, code);
-  } catch (err) {
-    console.error('Failed to check verification code:', err.message);
-    return res.status(502).json({ error: 'Could not check that code. Try again shortly.' });
-  }
-  if (!approved) return res.status(401).json(rejected);
-
-  setSessionCookie(res, process.env.DASHBOARD_PASSWORD || '');
-  res.json({ ok: true });
-});
+app.use('/login', createLoginRouter({ accountRepo, otp, verifiedPhones }));
 
 app.post('/logout', (req, res) => {
   clearSessionCookie(res);
   res.json({ ok: true });
 });
 
-app.use('/api', requireAuth, createApiRouter(ownerStores, { plan, sms }));
-app.use(requireAuth, express.static(path.join(__dirname, 'public')));
+// Onboarding sits behind the gate but in front of the dashboard: the session it
+// serves is authenticated and has no storage yet.
+app.use('/onboarding', requireAuth, createOnboardingRouter({ accountRepo, verifiedPhones, sms }));
+
+app.use('/invites', requireAuth, createInvitesRouter({ accountRepo }));
+
+app.use(
+  '/api',
+  requireAuth,
+  resolveDashboardStores({ accountRepo, ownerStores, ownerPlan: plan }),
+  createApiRouter({ sms })
+);
+app.use(requireAuth, onboardingGate({ accountRepo }), express.static(path.join(__dirname, 'public')));
+
+// Last resort: a handler that threw answers 500 instead of leaving the request
+// hanging, and the process stays up.
+app.use((err, req, res, next) => {
+  console.error('Unhandled request error:', err && err.stack ? err.stack : err);
+  if (res.headersSent) return next(err);
+  res.status(500).json({ error: 'Something went wrong' });
+});
 
 app.listen(PORT, () => {
   console.log(`Loci server running on port ${PORT}`);

@@ -131,6 +131,13 @@
     margin: 0 0 20px;
   }
 
+  .hint {
+    font-size: 12.5px;
+    font-style: italic;
+    color: var(--muted);
+    margin: -14px 0 20px;
+  }
+
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -156,6 +163,14 @@
       <div id="phoneStep">
         <label for="phone">Phone number</label>
         <input id="phone" name="phone" type="tel" autocomplete="tel" placeholder="(555) 123-4567" required />
+
+        <div id="inviteField" hidden>
+          <label for="invite">Invite code</label>
+          <input id="invite" name="invite" type="text" autocapitalize="characters" autocomplete="off"
+                 placeholder="ABCD-2345" />
+          <p class="hint">Only needed the first time you sign up.</p>
+        </div>
+
         <button type="submit" id="phoneSubmit">Text me a code</button>
       </div>
 
@@ -183,6 +198,10 @@
     const codeSubmit = document.getElementById('codeSubmit');
     const sentTo = document.getElementById('sentTo');
     const error = document.getElementById('error');
+    const inviteInput = document.getElementById('invite');
+
+    // An invite link carries the code, so the person only types their number.
+    inviteInput.value = new URLSearchParams(location.search).get('invite') || '';
 
     function post(url, payload) {
       return fetch(url, {
@@ -206,6 +225,7 @@
       .then(res => res.json())
       .then(options => {
         document.getElementById('usePhone').hidden = !options.otp;
+        document.getElementById('inviteField').hidden = !options.invites;
         show(options.otp ? 'phone' : 'password');
       })
       .catch(() => show('password'));
@@ -233,7 +253,10 @@
       error.textContent = '';
       const button = document.getElementById('phoneSubmit');
       button.disabled = true;
-      const res = await post('/login/otp/start', { phone: phoneInput.value });
+      const res = await post('/login/otp/start', {
+        phone: phoneInput.value,
+        invite: inviteInput.value
+      });
       button.disabled = false;
 
       if (!res.ok) {
@@ -255,11 +278,17 @@
       codeSubmit.disabled = true;
       const res = await post('/login/otp/check', {
         phone: phoneInput.value,
-        code: codeInput.value
+        code: codeInput.value,
+        invite: inviteInput.value
       });
       codeSubmit.disabled = false;
 
-      if (res.ok) return window.location.replace('/');
+      if (res.ok) {
+        // A number that just signed up has nowhere to keep notes yet, so it goes
+        // to onboarding instead of a dashboard that would have nothing to show.
+        const body = await res.json().catch(() => ({}));
+        return window.location.replace(body.onboarding ? '/onboarding' : '/');
+      }
 
       const body = await res.json().catch(() => ({}));
       error.textContent = body.error || 'Could not sign you in.';

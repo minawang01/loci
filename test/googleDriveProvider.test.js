@@ -54,4 +54,20 @@ describe('GoogleDriveProvider (mocked drive)', function() {
     const after = await provider.readFile('notes.md');
     assert.strictEqual(after, null);
   });
+
+  // googleapis pipes a media body that is not a string, so a Buffer threw
+  // `part.body.pipe is not a function` and no note ever reached Drive.
+  it('sends the body as a string, which is all googleapis accepts', async function() {
+    const bodies = [];
+    const fakeDrive = createFakeDrive();
+    const { create, update } = fakeDrive.files;
+    fakeDrive.files.create = args => { bodies.push(args.media.body); return create(args); };
+    fakeDrive.files.update = args => { bodies.push(args.media.body); return update(args); };
+
+    const provider = new GoogleDriveProvider({ drive: fakeDrive, folderId: 'root' });
+    await provider.writeFile('notes.md', 'created');
+    await provider.writeFile('notes.md', 'updated');
+
+    assert.deepStrictEqual(bodies, ['created', 'updated']);
+  });
 });
