@@ -73,6 +73,77 @@ describe('Claim flow routes', function() {
     server.close();
   });
 
+  // Handing out a claim link hands out an account, so only the owner may mint
+  // one; everyone else signs up with an invite and a verification code.
+  describe('POST /request is owner-only', function() {
+    const { issueSession, COOKIE_NAME } = require('../lib/auth');
+    const password = 'claim-test-password';
+    const originalPassword = process.env.DASHBOARD_PASSWORD;
+    let server, port, repo;
+
+    beforeEach(async function() {
+      process.env.DASHBOARD_PASSWORD = password;
+      repo = new UserAccountRepository(':memory:');
+      const app = express();
+      app.use(bodyParser.json());
+      app.use('/claim', createClaimRouter(repo));
+      server = http.createServer(app);
+      await new Promise(resolve => server.listen(0, resolve));
+      port = server.address().port;
+    });
+
+    afterEach(function() {
+      if (server) server.close();
+      if (originalPassword === undefined) delete process.env.DASHBOARD_PASSWORD;
+      else process.env.DASHBOARD_PASSWORD = originalPassword;
+    });
+
+    function request(headers) {
+      return new Promise((resolve, reject) => {
+        const data = JSON.stringify({ phone: '+14025559876' });
+        const req = http.request({
+          hostname: '127.0.0.1',
+          port,
+          path: '/claim/request',
+          method: 'POST',
+          headers: Object.assign({
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(data)
+          }, headers)
+        }, res => {
+          let raw = '';
+          res.on('data', c => (raw += c));
+          res.on('end', () => {
+            try { resolve({ status: res.statusCode, body: raw ? JSON.parse(raw) : null }); }
+            catch (e) { reject(e); }
+          });
+        });
+        req.on('error', reject);
+        req.write(data);
+        req.end();
+      });
+    }
+
+    it('rejects an unauthenticated request without minting a token', async function() {
+      const r = await request();
+      assert.strictEqual(r.status, 403);
+      assert.strictEqual(r.body.token, undefined);
+    });
+
+    it('rejects an account session', async function() {
+      const token = issueSession(password, { role: 'account', accountId: 1 });
+      const r = await request({ cookie: `${COOKIE_NAME}=${token}` });
+      assert.strictEqual(r.status, 403);
+    });
+
+    it('mints a token for the owner', async function() {
+      const token = issueSession(password, { role: 'owner' });
+      const r = await request({ cookie: `${COOKIE_NAME}=${token}` });
+      assert.strictEqual(r.status, 200);
+      assert.ok(r.body.token);
+    });
+  });
+
   describe('OAuth callback error redirects', function() {
     let server, port, repo;
 

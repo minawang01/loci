@@ -2,7 +2,20 @@ const express = require('express');
 const crypto = require('crypto');
 const { google } = require('googleapis');
 const { normalizePhone, hashPhone } = require('../lib/phone');
+const { getIdentity } = require('../lib/auth');
 const { encryptToken } = require('../lib/tokenCrypto');
+
+// Minting a claim link hands out an account: the number is never asked to prove
+// itself, so whoever opens the link connects their own Drive and that number is
+// active from then on. Invites plus a verification code are the way in for
+// everyone else; this is the owner's hatch for a number SMS cannot reach.
+function requireOwner(req, res, next) {
+  const identity = getIdentity(req);
+  if (!identity || identity.role !== 'owner') {
+    return res.status(403).json({ error: 'Only the owner can create claim links' });
+  }
+  next();
+}
 
 // Factory to allow injecting a repo (and, for tests, a stub OAuth2 client) —
 // real usage always omits `createOAuth2Client` and gets the googleapis one.
@@ -15,7 +28,7 @@ function createClaimRouter(userRepo, createOAuth2Client) {
   // Request a claim token for a phone number. The number itself is never
   // stored — only its HMAC hash — so the webhook can look accounts up the
   // same way from Twilio's `From` field.
-  router.post('/request', (req, res) => {
+  router.post('/request', requireOwner, (req, res) => {
     if (!process.env.ACCOUNT_HASH_SECRET) return res.status(503).json({ error: 'claiming is not configured' });
     const normalized = normalizePhone(req.body.phone);
     if (!normalized) return res.status(400).json({ error: 'a valid phone number is required' });

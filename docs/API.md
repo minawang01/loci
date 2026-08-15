@@ -4,7 +4,7 @@ This document describes the HTTP endpoints, OAuth claim flow, and environment va
 
 **Claim / OAuth**
 - POST /claim/request
-  - Description: Create a one-time claim token for a phone number. The number is normalized and hashed server-side (HMAC-SHA256, `ACCOUNT_HASH_SECRET`) before it touches the database — the raw number is never stored.
+  - Description: Create a one-time claim token for a phone number. Owner-only (403 otherwise): a claim link activates an account without any verification of the number, so it is the manual hatch for numbers that cannot receive a code — everyone else signs up with an invite at /login. The number is normalized and hashed server-side (HMAC-SHA256, `ACCOUNT_HASH_SECRET`) before it touches the database — the raw number is never stored.
   - Body: { "phone": "+15551234567" }
   - Response: { "ok": true, "token": "<short-token>", "url": "<claim url>", "expires_at": "<ISO date>" }
 
@@ -88,7 +88,7 @@ This document describes the HTTP endpoints, OAuth claim flow, and environment va
 **Examples**
 - Create a claim token (curl):
 
-  curl -X POST -H "Content-Type: application/json" -d '{"phone":"+15551234567"}' https://example.com/claim/request
+  curl -X POST -u "$DASHBOARD_USER:$DASHBOARD_PASSWORD" -H "Content-Type: application/json" -d '{"phone":"+15551234567"}' https://example.com/claim/request
 
 - Start OAuth in-browser:
   Open: https://example.com/claim/google/start?token=<token>
