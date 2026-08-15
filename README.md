@@ -329,7 +329,9 @@ A claim link (`POST /claim/request`) activates an account with no code sent and
 none entered, which would be a way around the invite gate, so minting one is
 owner-only. It stays as the hatch for a number that cannot receive a code at all;
 the link itself, and the rest of `/claim/*`, is still open so the person you send
-it to needs no login.
+it to needs no login. For the same reason an unrecognised number that texts the
+loci number is answered with the sign-up page rather than a claim link of its own,
+and nothing about it is written down.
 
 The welcome text sent at that point is best effort — it goes out from
 `TWILIO_SMS_NUMBER`, which is still blocked pending A2P 10DLC registration, so a

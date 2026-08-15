@@ -36,16 +36,28 @@ describe('resolveSender', function() {
     assert.strictEqual(result.kind, 'invalid');
   });
 
-  it('gives an unknown number a claim link, and reuses it on a second text', async function() {
+  // Texting in must not be a way to get an account: no claim token is minted
+  // for a stranger, and nothing about the number is written down.
+  it('points an unknown number at sign-up without minting a claim token', async function() {
     const repo = new UserAccountRepository(':memory:');
     const from = '+15551234567';
 
-    const first = await resolveSender({ fromNumber: from, accountRepo: repo, ownerStores, ownerPhone, publicUrl: 'https://loci.example.com' });
-    assert.strictEqual(first.kind, 'unclaimed');
-    assert.ok(first.claimUrl.startsWith('https://loci.example.com/claim.html?token='));
+    const result = await resolveSender({ fromNumber: from, accountRepo: repo, ownerStores, ownerPhone, publicUrl: 'https://loci.example.com/' });
+    assert.strictEqual(result.kind, 'unclaimed');
+    assert.strictEqual(result.signupUrl, 'https://loci.example.com/login');
+    assert.strictEqual(result.onboarding, false);
+    assert.ok(!repo.findActiveClaimTokenByPhoneHash(hashPhone(from)));
+    assert.ok(!repo.findByPhoneHash(hashPhone(from)));
+  });
 
-    const second = await resolveSender({ fromNumber: from, accountRepo: repo, ownerStores, ownerPhone, publicUrl: 'https://loci.example.com' });
-    assert.strictEqual(second.claimUrl, first.claimUrl);
+  it('tells a pending account to finish connecting Drive', async function() {
+    const repo = new UserAccountRepository(':memory:');
+    const from = '+15551112222';
+    repo.createAccount({ phone_number_hash: hashPhone(from), status: 'pending' });
+
+    const result = await resolveSender({ fromNumber: from, accountRepo: repo, ownerStores, ownerPhone, publicUrl: 'https://loci.example.com' });
+    assert.strictEqual(result.kind, 'unclaimed');
+    assert.strictEqual(result.onboarding, true);
   });
 
   it('routes a claimed account to Drive-backed stores and persists the folder id', async function() {

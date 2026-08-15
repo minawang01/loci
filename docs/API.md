@@ -24,7 +24,7 @@ This document describes the HTTP endpoints, OAuth claim flow, and environment va
   - Description: Twilio webhook for incoming SMS/WhatsApp messages. The sender's number (Twilio's `From` field) is resolved to a storage destination by [lib/accounts/resolveSender.js](../lib/accounts/resolveSender.js):
     - `OWNER_PHONE_NUMBER` always reads/writes local disk.
     - A number linked to an active account with a stored refresh token gets its own stores, built fresh per request against its linked Google Drive folder.
-    - Any other number gets a reply with a claim link (the same link is reused until it's claimed or expires) and nothing is saved.
+    - Any other number gets a reply pointing at /login — an invite is needed to sign up, or Drive still has to be connected if the account is `pending` — and nothing is saved, not even a claim token: replying with a claim link would hand an account to anyone who texts in.
   - Note: See [routes/webhook.js](../routes/webhook.js) for the message-parsing rules once a sender is resolved.
 
 - GET/POST /api/*

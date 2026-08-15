@@ -211,7 +211,11 @@ function createWebhookRouter({ accountRepo, ownerStores, ownerPhone }) {
     }
     if (resolved.kind === 'unclaimed') {
       return res.type('text/xml').send(
-        twiml(`Connect your Google account to start saving notes: ${resolved.claimUrl}`)
+        twiml(
+          resolved.onboarding
+            ? `Connect your Google Drive to start saving notes: ${resolved.signupUrl}`
+            : `You need an invite to save notes with loci. Once you have a code, sign up at ${resolved.signupUrl}`
+        )
       );
     }
 
