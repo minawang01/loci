@@ -40,9 +40,11 @@ function createLoginRouter({
   otp,
   verifiedPhones,
   ipLimiters = defaultIpLimiters(),
-  // Per-number cap, on top of the per-IP one: without it a single number can be
-  // pestered with codes from a rotation of addresses.
-  phoneLimiter = createAttemptLimiter({ limit: 3, windowMs: 15 * 60 * 1000 })
+  // Per-number caps, on top of the per-IP ones: without them a single number can
+  // be pestered with codes, and its code guessed, from a rotation of addresses.
+  phoneLimiter = createAttemptLimiter({ limit: 3, windowMs: 15 * 60 * 1000 }),
+  codeLimiter = createAttemptLimiter({ limit: 5, windowMs: 15 * 60 * 1000 }),
+  inviteLimiter = createAttemptLimiter({ limit: 5, windowMs: 15 * 60 * 1000 })
 }) {
   const router = express.Router();
 
@@ -103,11 +105,19 @@ function createLoginRouter({
 
     const identity = loginIdentityFor(phone);
     const resuming = !identity && canResumeOnboarding(phone);
-    const invite = identity || resuming ? null : signupInviteFor(phone, req.body.invite);
+    const typedCode = identity || resuming ? null : invites.normalizeCode(req.body.invite);
+
+    // A rejected invite must cost the number an attempt: counting only the codes
+    // actually sent would leave guessing bounded by the per-IP limiter alone.
+    if (typedCode && !inviteLimiter.allow(phone)) {
+      return res.status(429).json({ error: 'Too many invite codes tried for that number.' });
+    }
+
+    const invite = typedCode ? signupInviteFor(phone, typedCode) : null;
     if (!identity && !resuming && !invite) {
       // An invite code is something the person was given and typed, so a wrong
       // one is worth saying out loud — it reveals nothing about any number.
-      if (invites.normalizeCode(req.body.invite)) {
+      if (typedCode) {
         return res.status(400).json({ error: 'That invite code is not valid.' });
       }
       return res.json({ ok: true });
@@ -136,6 +146,11 @@ function createLoginRouter({
     const code = String(req.body.code || '').trim();
     const rejected = { error: 'That code is not valid' };
     if (!phone || !/^\d{4,10}$/.test(code)) return res.status(401).json(rejected);
+
+    // The request side is capped per number, so the guessing side has to be too.
+    if (!codeLimiter.allow(phone)) {
+      return res.status(429).json({ error: 'Too many attempts for that number. Try again in a few minutes.' });
+    }
 
     // Recomputed server-side from the number that just proved itself — nothing
     // about which account this session gets comes from the client.

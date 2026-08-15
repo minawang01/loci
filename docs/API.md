@@ -36,7 +36,7 @@ This document describes the HTTP endpoints, OAuth claim flow, and environment va
   - Response: { "role": "owner" } or { "role": "account", "accountId": 3 }
 
 - POST /login/otp/start, POST /login/otp/check
-  - Description: Phone sign-in and invite-gated sign-up. A number needs no invite if it is `OWNER_PHONE_NUMBER`, is listed in `LOGIN_PHONE_NUMBERS` (both of which get the owner's dashboard), or has a connected account (which gets its own scoped dashboard) — see [lib/accounts/resolveLogin.js](../lib/accounts/resolveLogin.js). Any other number must send a valid `invite`, and gets a `pending` account plus an onboarding session; without one it gets the same response as a recognised number and no text. Capped per IP (5 codes, 10 attempts / 15 min) and per number (3 codes / 15 min).
+  - Description: Phone sign-in and invite-gated sign-up. A number needs no invite if it is `OWNER_PHONE_NUMBER`, is listed in `LOGIN_PHONE_NUMBERS` (both of which get the owner's dashboard), or has a connected account (which gets its own scoped dashboard) — see [lib/accounts/resolveLogin.js](../lib/accounts/resolveLogin.js). Any other number must send a valid `invite`, and gets a `pending` account plus an onboarding session; without one it gets the same response as a recognised number and no text. Capped per IP (5 codes, 10 attempts / 15 min) and per number (3 codes, 5 code guesses, 5 invite guesses / 15 min).
   - Body: { "phone": "+15551234567", "invite": "ABCD-2345", "code": "123456" } (`invite` only when signing up, `code` only on check)
   - Response: { "ok": true } or, for a number that just signed up, { "ok": true, "onboarding": true }
 

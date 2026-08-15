@@ -264,6 +264,19 @@ describe('invite-gated sign-up and onboarding', function() {
       const other = await request('POST', '/login/otp/start', { body: { phone: NEW_PHONE, invite: invite() } });
       assert.strictEqual(other.status, 200);
     });
+
+    it('caps invite guesses per number, so a rejected code is not free', async function() {
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const guess = await request('POST', '/login/otp/start', { body: { phone: NEW_PHONE, invite: 'ZZZZ-000' } });
+        assert.strictEqual(guess.status, 400);
+      }
+      const capped = await request('POST', '/login/otp/start', { body: { phone: NEW_PHONE, invite: invite() } });
+      assert.strictEqual(capped.status, 429);
+      assert.deepStrictEqual(sentCodes, []);
+
+      const other = await request('POST', '/login/otp/start', { body: { phone: OTHER_PHONE, invite: invite() } });
+      assert.strictEqual(other.status, 200);
+    });
   });
 
   describe('verifying a code', function() {
@@ -303,6 +316,28 @@ describe('invite-gated sign-up and onboarding', function() {
       const res = await request('POST', '/login/otp/check', { body: { phone: NEW_PHONE, code: CODE, invite: code } });
       assert.strictEqual(res.status, 401);
       assert.strictEqual(repo.findByPhoneHash(hashPhone(NEW_PHONE)).status, 'revoked');
+    });
+
+    it('will not sign a number back up that was cut off with some other status', async function() {
+      const code = invite();
+      repo.createAccount({ phone_number_hash: hashPhone(NEW_PHONE), status: 'disabled' });
+      const res = await request('POST', '/login/otp/check', { body: { phone: NEW_PHONE, code: CODE, invite: code } });
+      assert.strictEqual(res.status, 401);
+      assert.strictEqual(repo.findByPhoneHash(hashPhone(NEW_PHONE)).status, 'disabled');
+    });
+
+    it('caps code guesses per number, not just per address', async function() {
+      const code = invite();
+      await request('POST', '/login/otp/start', { body: { phone: NEW_PHONE, invite: code } });
+
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const wrong = await request('POST', '/login/otp/check', { body: { phone: NEW_PHONE, code: '000000', invite: code } });
+        assert.strictEqual(wrong.status, 401);
+      }
+      // Even the right code is refused once the number is capped.
+      const capped = await request('POST', '/login/otp/check', { body: { phone: NEW_PHONE, code: CODE, invite: code } });
+      assert.strictEqual(capped.status, 429);
+      assert.strictEqual(repo.findByPhoneHash(hashPhone(NEW_PHONE)), null);
     });
 
     it('lets a half-onboarded number back in without a second invite', async function() {

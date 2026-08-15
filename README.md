@@ -294,8 +294,9 @@ Who can sign in without an invite is the union of three things:
 anything listed in the optional `LOGIN_PHONE_NUMBERS`. Any other number gets the
 same "a code is on its way" response and no text, so the page never reveals who
 is allowed in. Requests are capped at 5 codes and 10 attempts per 15 minutes per
-IP, and at 3 codes per 15 minutes per number — the IP cap alone lets one number
-be pestered from a rotation of addresses.
+IP, and per number at 3 codes, 5 code guesses and 5 invite guesses per 15 minutes
+— the IP caps alone leave a single number open to being pestered, and its code or
+invite guessed, from a rotation of addresses.
 
 ### Signing up: invites and onboarding
 
