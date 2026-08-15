@@ -1,10 +1,25 @@
 const express = require('express');
 
+// Express 4 does not catch a rejected async handler: it becomes an unhandled
+// rejection, which takes the whole process down — one failed Drive call used to
+// restart the server. Wrapping the verbs once forwards the error to Express
+// instead, where the app's error handler answers 500.
+function asyncRouter() {
+  const router = express.Router();
+  for (const method of ['get', 'post', 'put', 'patch', 'delete']) {
+    const register = router[method].bind(router);
+    router[method] = (routePath, ...handlers) =>
+      register(routePath, ...handlers.map(handler => (req, res, next) =>
+        Promise.resolve(handler(req, res, next)).catch(next)));
+  }
+  return router;
+}
+
 // Every handler reads its stores off the request rather than closing over one
 // bundle: which storage a request touches depends on who is signed in (see
 // lib/accounts/resolveDashboardStores.js, which sets `req.stores`/`req.plan`).
 function createApiRouter({ sms }) {
-  const router = express.Router();
+  const router = asyncRouter();
 
   // Lets the dashboard tell an owner session from an account one; the
   // send-a-plan-by-text action only exists for the owner.

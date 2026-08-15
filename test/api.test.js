@@ -105,15 +105,13 @@ describe('dashboard API per session identity', function() {
         let raw = '';
         res.on('data', chunk => (raw += chunk));
         res.on('end', () => {
-          try {
-            resolve({
-              status: res.statusCode,
-              body: raw ? JSON.parse(raw) : null,
-              setCookie: res.headers['set-cookie']
-            });
-          } catch (e) {
-            reject(e);
+          let body = null;
+          // Express's own error page is HTML, so a body that will not parse is
+          // reported as text rather than failing the request outright.
+          if (raw) {
+            try { body = JSON.parse(raw); } catch (e) { body = raw; }
           }
+          resolve({ status: res.statusCode, body, setCookie: res.headers['set-cookie'] });
         });
       });
       req.on('error', reject);
@@ -222,6 +220,24 @@ describe('dashboard API per session identity', function() {
       else process.env.ANTHROPIC_API_KEY = originalKey;
       if (originalPhone === undefined) delete process.env.PLAN_PHONE_NUMBER;
       else process.env.PLAN_PHONE_NUMBER = originalPhone;
+    }
+  });
+
+  // A storage call that fails used to reject unhandled — which stops the whole
+  // server, not just the request — because Express 4 never sees it.
+  it('answers a failing handler with 500 rather than rejecting unhandled', async function() {
+    const rejections = [];
+    const record = err => rejections.push(err);
+    process.on('unhandledRejection', record);
+    ownerStores.notes.parseEntries = async () => { throw new Error('drive is down'); };
+
+    try {
+      const res = await request('GET', '/api/notes', { cookie: ownerCookie() });
+      assert.strictEqual(res.status, 500);
+      await new Promise(resolve => setImmediate(resolve));
+      assert.deepStrictEqual(rejections, []);
+    } finally {
+      process.removeListener('unhandledRejection', record);
     }
   });
 });

@@ -115,6 +115,14 @@ app.use(
 );
 app.use(requireAuth, onboardingGate({ accountRepo }), express.static(path.join(__dirname, 'public')));
 
+// Last resort: a handler that threw answers 500 instead of leaving the request
+// hanging, and the process stays up.
+app.use((err, req, res, next) => {
+  console.error('Unhandled request error:', err && err.stack ? err.stack : err);
+  if (res.headersSent) return next(err);
+  res.status(500).json({ error: 'Something went wrong' });
+});
+
 app.listen(PORT, () => {
   console.log(`Loci server running on port ${PORT}`);
   console.log(`Notes and tags are stored in ${DATA_DIR}`);
